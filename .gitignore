@@ -1,0 +1,41 @@
+# This repository contains the tournament app, not the REA analysis workspace.
+/*
+!/.gitignore
+!/APP-IMPLEMENTATION-PLAN.md
+!/README.md
+!/app/
+
+# Host metadata and local secrets
+._*
+.DS_Store
+.env
+.env.*
+*.jks
+*.keystore
+*.pem
+*.p12
+*.pfx
+**/.signing/
+**/local.properties
+**/google-services.json
+**/*service-account*.json
+**/*serviceAccount*.json
+**/*credentials*.json
+
+# Dependencies, SDKs, generated outputs and copied upstream checkouts
+**/node_modules/
+**/.tools/
+**/.gradle/
+**/build/
+**/dist/
+**/.firebase/
+**/__pycache__/
+*.pyc
+*.log
+app/releases/
+app/verification/
+app/ui-ux-pro-max-skill/
+app/andrej-karpathy-skills/
+app/.local-emulator/
+app/.emulator-avds/
+app/.arena-preview.sparseimage

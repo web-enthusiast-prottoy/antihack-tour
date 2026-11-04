@@ -1,0 +1,17 @@
+._*
+.DS_Store
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+.signing/
+.env
+.local-emulator/
+.emulator-avds/
+.arena-preview.sparseimage
+.tools/
+node_modules/
+dist/
+*-debug.log
+.firebase/

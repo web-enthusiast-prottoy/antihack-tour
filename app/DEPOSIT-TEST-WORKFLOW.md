@@ -1,0 +1,21 @@
+# Deposit review — fictitious local testing only
+
+This flow requires the local Auth/Firestore emulators and operations service. Live-preview deposits remain disabled. The receiving number initially shown is the owner-provided 01889898989 and can be changed in Administration → Payment settings. This is still a test build: do not send real money. Use fictitious sender/reference/amount values in the local app.
+
+Player: Wallet → Add money. The player sees exactly three fields, in order: Amount sent (৳), Transaction ID and Sender’s mobile number. Instructions below explain sending money first and filling the form afterward, with a Copy number action. The test accepts an exact positive taka amount (at most 100000.00), an 11-digit sending number and a test reference (6–80 letters/digits/hyphens). The form generates a stable draft request ID. Submit while connected; errors remain visible without losing fields. Retry the same draft after a network failure. The confirmation and wallet activity show the request ID. Pending status is not proof of receipt. A request ID cannot be silently reused with different claim details.
+
+Staff: Administration → Deposits → Approve after review. Read the submitted claim, then enter the checked test receipt amount, transaction reference, sending number and receiving identifier. Confirm that you checked successful receipt in the test scenario. Approval requires exact agreement; a discrepancy must be rejected with a reason. The checkbox and typed details do not verify an actual payment. This is a simulation of a trusted operator's manual decision.
+
+Reject with reason records who decided and when, preserves the claim and leaves balances/reference uniqueness unchanged. Repeating rejection returns the existing result without changing the reason. To correct a rejected claim, the player submits a new request with corrected details; the earlier record remains. Multiple pending claims for one transaction do not permanently reserve it. The first valid approved claim consumes its provider/receiver-scoped reference; later approval attempts cannot credit it again. A terminal rejected/approved decision cannot switch state through this endpoint.
+
+Approval atomically updates the wallet, creates an immutable credit ledger record and verified-reference claim, marks the request approved and adds a staff audit. Concurrent approval/rejection chooses one committed final outcome. Safe integer limits are enforced. Entry-fee ledger records also have type, status, related match/request and balance-after metadata. There is no full ledger viewer, split balance model, reconciliation, reversal, withdrawal or real payment processing in this increment.
+
+Historical local requests without sender/provider/receiver/currency metadata cannot be approved as if verified; reject and resubmit correct fictitious details instead. Existing credits and legacy reference records are not silently rewritten. Approval checks both the new scoped reference and the old global reference so an earlier credited receipt cannot be credited again after this update. Reset only disposable emulator data when using a fresh test fixture.
+
+Before real use, supply the approved receiving account/instructions, verify the actual provider's reference format and normalization, finish the production-capable finance/security/accounting design and complete owner/device/operational acceptance. Do not interpret the demo reference format or number validation as an authorized bKash integration. See verification/deposit-review/REVIEW.md for evidence and limitations.
+
+## Receiving-number setting
+
+Staff open Administration → Payment settings, edit Receiving bKash number and save while connected. Only authorized staff can change it, and each save creates an immutable audit record. Players read the same setting in Add Money. Copy and submit require a current server-confirmed number. The initial value is 01889898989 if no setting is saved yet.
+
+Claims preserve the number shown when they were submitted. An identical retry still returns its saved result if the admin later changes the number. A new submission using an outdated displayed number is rejected and asks the player to reopen the form. This does not enable real payments or verify receipt automatically.

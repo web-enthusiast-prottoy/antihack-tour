@@ -1,0 +1,11 @@
+# Private support requests
+
+Players open Profile → Support requests → New request. Enter a subject (80 characters maximum), describe the issue (4000 maximum), and optionally add a match/payment/request reference (200 maximum). Do not include passwords, PINs, OTPs, payment account login details or unnecessary personal information. Submit while connected. The request ID appears in the list and identifies the saved record; reconnect/retry the same draft rather than creating repeated requests.
+
+Select a request to read the original description, current displayed status and staff reply history. Refresh loads current server data; this is not a real-time chat and there is no promised reply time. Lists/history load 20 rows at a time, using Load more for older records. Replies do not authorize payment or change wallet balances. Original submitted text is preserved. Players cannot edit it or reply within the existing thread yet; for additional information, submit a new request referencing the earlier ID.
+
+Staff open Profile → Administration → Support. Select a request, review the description and reference, write a reply, then choose Open, Under review or Resolved and save. A response is required for a status change. Every decision atomically updates the summary and writes immutable response history plus a private staff audit record. The player sees the reply/status/time; staff account IDs remain private. Resolving a dispute does not perform a refund, settlement or payout. Use a separate authorized financial workflow when one exists.
+
+If another staff member replied first, the app rejects a conflicting revision. Refresh and review the newer history before responding. Repeating an identical saved decision recovers its existing result instead of appending another reply. Resolved requests can be reopened with an explanatory staff response; history cannot be deleted or overwritten.
+
+The queue has no push notification, assignment, spam throttling or response-time guarantee. Staff must refresh and review it manually. Set staffing, escalation, retention and actual contact policies before public launch. The owner still supplies the published Help page/contact route. Production rules and the new disputes index have not been deployed by this increment. See verification/support-requests/REVIEW.md for local checks and device limits.

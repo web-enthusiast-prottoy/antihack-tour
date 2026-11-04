@@ -1,0 +1,17 @@
+Current production release: see [PRODUCTION-RELEASE.md](PRODUCTION-RELEASE.md). It supersedes the default-number and unfinished-feature statements below. The owner identified the old number as a demo; deposit instructions are disabled until Admin saves/enables a real number. Paid entries, separate winnings, withdrawal requests and cancellation refunds are now connected. Historical evidence follows.
+
+# Connected live wallet
+
+Install releases/arena-live.apk (the app name is Arena). Sign in with a live Firebase account. Existing local test accounts and deposits belong to the separate Arena Local installation and are not migrated into live balances.
+
+Players open Wallet → Add money. The form has only amount already sent, transaction ID and sender mobile number. Instructions show the current receiving bKash number (initially 01889898989) with Copy number. Submitting creates a private Pending claim in walletDeposits; it does not itself credit money. Requests and balances are attached to the authenticated account. Offline cached balances are labelled saved, and uncommitted writes do not become displayed confirmed credits.
+
+Staff open Profile → Administration → Deposits. Check the actual receiving bKash account's successful transaction history. Match amount, transaction ID, sender and receiving number, then approve. Approval atomically records the approved request, balance increment in wallets/{uid}, immutable walletLedger credit, unique verifiedReceipts reference and private staff audit. The player's wallet listener receives the new balance. Repeating approval recovers the existing result and cannot credit again. Different pending claims with the same receiving number/transaction ID cannot both credit. Never approve solely because a player typed a transaction ID.
+
+For mismatches, reject with a reason. Rejection changes no balance and does not reserve the receipt reference. A rejected claim remains part of the history; corrections use a new request. Approved/rejected decisions and ledger/receipt records cannot be edited/deleted by the client. A user cannot write a wallet balance directly. Only server-authorized staff can approve, and staff rights are checked by Firestore rules at commit time.
+
+Administration → Payment settings edits the receiving number with an audit record. Existing claims retain their original receiving number. A request made from a stale number view must be refreshed before submission. Amounts are stored as integer paisa. The current claim limit is 100000.00 taka; financial staff must still confirm actual receipt and all operating policies.
+
+Live collections are walletDeposits, wallets, walletLedger, verifiedReceipts and private auditRecords. The old emulator-only depositRequests/ledger/paymentReferences collections remain separate historical/test schemas. No live data migration was needed: the inspected live database had no wallets or receipt claims. The live APK never calls the local HTTP operations service.
+
+Only Firestore rules were deployed to arena-ff-34506; no billing upgrade, Cloud Functions, store publication or automatic payment integration was added. Existing default database free-tier status was verified. Paid-match confirmation, withdrawals, refunds, split balances and full ledger browsing remain separate unfinished features. Device UI/end-to-end approval checks remain distinct from deployed API/rules verification. See verification/live-wallet/REVIEW.md for exact evidence and limits.
