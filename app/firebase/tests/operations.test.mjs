@@ -129,3 +129,48 @@ test('deposit records the displayed receiving number and preserves retry after a
   assert.equal((await db.doc(`depositRequests/${uid}_${(prefix+'new').toUpperCase()}`).get()).get('receiver'),'01700000000');
  }finally{await db.doc('paymentInstructions/bkash').delete();}
 });
+
+test('SMS approval requires an owner, an exact unique claim and an unused receipt',async()=>{
+ const prefix='sms'+Date.now(),owner=prefix+'owner',staff=prefix+'staff',first=prefix+'first',second=prefix+'second';
+ extraPrefixes.push(prefix);
+ await db.doc(`staffRoles/${owner}`).set({admin:true,owner:true});
+ await db.doc(`staffRoles/${staff}`).set({admin:true});
+ const receiver=(await db.doc('paymentInstructions/bkash').get()).get('number')||'01889898989';
+ const sender='01700000000',amount=12345,reference=prefix.toUpperCase(),id=first+'_'+reference;
+ const receipt={id,receiptConfirmed:true,verifiedAmount:amount,verifiedReference:reference,verifiedSender:sender,verifiedReceiver:receiver,paidAtMillis:Date.now()};
+ await operate(first,'deposit',{amount,sender,reference});
+ await assert.rejects(operate(staff,'autoApproveDeposit',receipt),/Staff access/);
+ await assert.rejects(operate(owner,'autoApproveDeposit',{...receipt,verifiedSender:'01800000000'}),/details differ/);
+ await assert.rejects(operate(owner,'autoApproveDeposit',{...receipt,paidAtMillis:0}),/review window/);
+ await operate(second,'deposit',{amount,sender,reference});
+ await assert.rejects(operate(owner,'autoApproveDeposit',receipt),/Multiple pending/);
+ assert.equal((await db.doc(`depositRequests/${id}`).get()).get('status'),'pending');
+ await operate(owner,'rejectDeposit',{id:second+'_'+reference,reason:'Competing sample claim'});
+ await Promise.all([operate(owner,'autoApproveDeposit',receipt),operate(owner,'autoApproveDeposit',receipt)]);
+ assert.equal((await db.doc(`wallets/${first}`).get()).get('balance'),amount);
+ assert.equal((await db.doc(`ledger/deposit_${id}`).get()).get('reference'),reference);
+ const replay=prefix+'replay';
+ await operate(replay,'deposit',{amount,sender,reference});
+ await assert.rejects(operate(owner,'autoApproveDeposit',{...receipt,id:replay+'_'+reference}),/already been credited/);
+});
+test('local operations enforce account and match bans inside registration transactions',async()=>{
+ const prefix='ban'+Date.now();if(!testPrefix)testPrefix=prefix;extraPrefixes.push(prefix);
+ const uid=prefix+'player',staff=prefix+'staff',match=prefix+'match';
+ await db.doc(`staffRoles/${staff}`).set({admin:true});
+ await db.doc(`users/${uid}`).set({ffUsername:uid});
+ await db.doc(`wallets/${uid}`).set({balance:3000});
+ await db.doc(`matches/${match}`).set({status:'open',mode:'solo',capacity:2,joined:0,entryPaisa:1000});
+ await db.doc(`accountBans/${uid}`).set({active:true});
+ await assert.rejects(operate(uid,'deposit',{amount:1000,sender:'01700000000',reference:prefix+'deposit'}),/banned/);
+ await assert.rejects(operate(uid,'join',{match}),/banned/);
+ await db.doc(`accountBans/${uid}`).set({active:false});
+ await operate(uid,'join',{match});
+ const ban=db.doc(`matches/${match}/bans/${uid}`);
+ await ban.set({active:true});
+ await assert.rejects(operate(staff,'confirmEntry',{id:`${uid}_${match}`}),/banned/);
+ assert.equal((await db.doc(`wallets/${uid}`).get()).get('balance'),3000);
+ await ban.set({active:false});
+ await operate(staff,'confirmEntry',{id:`${uid}_${match}`});
+ assert.equal((await db.doc(`wallets/${uid}`).get()).get('balance'),2000);
+ await ban.delete();
+});

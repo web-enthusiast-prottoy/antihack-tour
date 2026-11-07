@@ -160,6 +160,15 @@ test('room release enforces server time, confirmed membership and active match s
  await assertFails(getDoc(doc(player(),'rooms','free')));
  await assertSucceeds(getDoc(doc(operator(),'rooms','free')));
 });
+test('enabled room releases by server time while registration stays open without another admin write',async()=>{
+ await seedWorkflow();
+ await env.withSecurityRulesDisabled(async c=>updateDoc(doc(c.firestore(),'matches','free'),{status:'open'}));
+ await assertSucceeds(writeRoom({releaseAt:new Date(Date.now()+2000)}));
+ await assertFails(getDoc(doc(player(),'rooms','free')));
+ await new Promise(resolve=>setTimeout(resolve,2200));
+ await assertSucceeds(getDoc(doc(player(),'rooms','free')));
+ await assertFails(getDoc(doc(env.authenticatedContext('other').firestore(),'rooms','free')));
+});
 test('disabled, cancelled and requested-entry rooms are denied',async()=>{
  await seedWorkflow();await writeRoom();
  await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'entries','player_free'),{status:'requested'});});
@@ -180,10 +189,11 @@ test('room saves require staff, schema, revision and immutable audit',async()=>{
  await assertSucceeds(writeRoom({revision:2,password:'NEW-FAKE-PASSWORD'}));
  await assertFails(deleteDoc(doc(operator(),'rooms','free')));
 });
-test('result drafts require confirmed entries and review state; they stay private',async()=>{
+test('result drafts require confirmed entries and stay private',async()=>{
  await seedWorkflow('live');
+ await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'entries','player_free'),{status:'requested'});});
  await assertFails(writeDraft());
- await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'matches','free'),{status:'review'});});
+ await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'entries','player_free'),{status:'confirmed'});});
  await assertFails(writeDraft({},false));
  await assertFails(writeDraft({username:'Forged'}));
  await assertFails(writeDraft({placement:0}));
@@ -481,9 +491,9 @@ function writeMatch(db,id,data,from,audit=true,history=true) {
  if(audit)batch.set(doc(db,'auditRecords',`match_${id}_${data.revision}`),{action:'saveMatch',path:'matches/'+id,actor:'operator',at:serverTimestamp()});
  return batch.commit();
 }
-test('match lifecycle requires draft creation, sequential transitions, audit and immutable history',async()=>{
+test('match lifecycle permits open creation and requires sequential transitions, audit and immutable history',async()=>{
  await provision();const db=operator();const data=matchData('operator');
- await assertFails(writeMatch(db,'lifecycle',{...data,status:'open'},'none'));
+ await assertSucceeds(writeMatch(db,'open-first',{...data,status:'open'},'none'));
  await assertFails(writeMatch(db,'lifecycle',data,'none',false));await assertFails(writeMatch(db,'lifecycle',data,'none',true,false));
  await assertSucceeds(writeMatch(db,'lifecycle',data,'none'));
  await assertFails(writeMatch(db,'lifecycle',{...data,status:'live',revision:2},'draft'));
@@ -498,7 +508,7 @@ test('match lifecycle requires draft creation, sequential transitions, audit and
 test('registered entry terms are locked but staff may correct presentation',async()=>{
  await provision();await seedFreeMatch();await clientFreeJoin('player');const db=operator();
  const old=(await getDoc(doc(db,'matches','free'))).data();
- for(const changed of [{mode:'duo'},{map:'Changed map'},{startsAt:new Date(0)},{capacity:20},{entryPaisa:100},{prizePaisa:100},{perKillPaisa:100},{rules:'New rules'},{cancellationTerms:'New terms'}])await assertFails(writeMatch(db,'free',{...old,...changed,revision:2,updatedAt:serverTimestamp()},'open'));
+ for(const changed of [{mode:'duo'},{map:'Changed map'},{startsAt:new Date(0)},{capacity:20},{entryPaisa:100},{perKillPaisa:100},{rules:'New rules'},{cancellationTerms:'New terms'}])await assertFails(writeMatch(db,'free',{...old,...changed,revision:2,updatedAt:serverTimestamp()},'open'));
  await assertSucceeds(writeMatch(db,'free',{...old,title:'Corrected title',description:'Corrected description',revision:2,updatedAt:serverTimestamp()},'open'));
 });
 test('cancellation records reason and time for free and paid matches; terminal edits stay blocked',async()=>{
@@ -697,4 +707,120 @@ test('staff upload bounded immutable artwork and guests can read it but cannot u
  await assertFails(updateDoc(doc(db,'artwork','sample'),{contentType:'text/html'}));
  await assertSucceeds(setDoc(doc(db,'categories','image-category'),{name:'With image',order:0,active:true,artworkId:'sample',updatedAt:serverTimestamp(),updatedBy:'operator'}));
  await assertFails(setDoc(doc(db,'categories','broken-image'),{name:'Broken',order:0,active:true,artworkId:'missing',updatedAt:serverTimestamp(),updatedBy:'operator'}));
+});
+
+test('owner deletes only inactive categories with an atomic audit; inactive categories cannot receive new matches',async()=>{
+ await provision();const db=env.authenticatedContext('owner').firestore();
+ await env.withSecurityRulesDisabled(async c=>{
+  await setDoc(doc(c.firestore(),'categories','unused'),{name:'Unused sample',order:0,active:false,updatedAt:new Date(),updatedBy:'owner'});
+  await setDoc(doc(c.firestore(),'categories','active'),{name:'Active sample',order:0,active:true,updatedAt:new Date(),updatedBy:'owner'});
+ });
+ function remove(db,id){const b=writeBatch(db);b.delete(doc(db,'categories',id));b.set(doc(db,'auditRecords',`deleteCategory_${id}`),{action:'deleteCategory',path:`categories/${id}`,actor:db===dbOwner?'owner':'operator',at:serverTimestamp()});return b.commit();}
+ const dbOwner=db;
+ await assertFails(deleteDoc(doc(db,'categories','unused')));
+ await assertFails(remove(operator(),'unused'));
+ await assertFails(remove(db,'active'));
+ await assertFails(writeMatch(db,'inactive-category',{...matchData('owner'),categoryId:'unused'},'none'));
+ await assertSucceeds(remove(db,'unused'));
+ await assertFails(deleteDoc(doc(db,'auditRecords','deleteCategory_unused')));
+});
+
+test('owner deletes matches in every status with audit while non-owners remain denied',async()=>{
+ await provision();const db=env.authenticatedContext('owner').firestore();
+ for(const [id,status,joined] of [['empty','draft',0],['open','open',0],['registered','closed',1],['live','live',2],['review','review',2],['completed','completed',2],['cancelled','cancelled',1]]){
+  await env.withSecurityRulesDisabled(async c=>setDoc(doc(c.firestore(),'matches',id),{...matchData('owner'),status,joined}));
+ }
+ await env.withSecurityRulesDisabled(async c=>{
+  await setDoc(doc(c.firestore(),'entries','retained-entry'),{match:'registered',uid:'player',status:'confirmed'});
+  await setDoc(doc(c.firestore(),'matches','registered','history','1'),{from:'draft',to:'open'});
+ });
+ const remove=(db,id,uid)=>{const b=writeBatch(db);b.delete(doc(db,'matches',id));b.set(doc(db,'auditRecords',`deleteMatch_${id}`),{action:'deleteMatch',path:`matches/${id}`,actor:uid,at:serverTimestamp()});return b.commit();};
+ await assertFails(deleteDoc(doc(db,'matches','empty')));
+ await assertFails(remove(operator(),'empty','operator'));
+ await assertFails(remove(player(),'empty','player'));
+ for(const id of ['open','registered','live','review','completed','cancelled']) {
+  await assertSucceeds(remove(db,id,'owner'));
+  assert.equal((await getDoc(doc(db,'matches',id))).exists(),false);
+ }
+ await assertSucceeds(remove(db,'empty','owner'));
+ await env.withSecurityRulesDisabled(async c=>{
+  assert.equal((await getDoc(doc(c.firestore(),'entries','retained-entry'))).exists(),true);
+  assert.equal((await getDoc(doc(c.firestore(),'matches','registered','history','1'))).exists(),true);
+ });
+ await assertFails(deleteDoc(doc(db,'auditRecords','deleteMatch_empty')));
+});
+
+// Participant moderation uses private documents; public snapshots and financial history stay intact.
+async function moderate(uid, scope='account', active=true, revision=1, reason='Confirmed cheating') {
+ const db=env.authenticatedContext('operator').firestore();
+ const path=scope==='account'?`accountBans/${uid}`:`matches/free/bans/${uid}`;
+ const key=scope==='account'?`account_${uid}`:`match_free_${uid}`;
+ const batch=writeBatch(db);
+ batch.set(doc(db,path),{uid,active,reason,revision,updatedAt:serverTimestamp(),updatedBy:'operator'});
+ batch.set(doc(db,`auditRecords/ban_${key}_${revision}`),{action:'moderatePlayer',path,reason,actor:'operator',at:serverTimestamp()});
+ return batch.commit();
+}
+test('account ban blocks private reads, profile changes and registration; lifting restores access',async()=>{
+ await provision();await seedFreeMatch();
+ await assertSucceeds(moderate('player'));
+ const accountBan=await assertSucceeds(getDoc(doc(player(),'accountBans','player')));
+ assert.equal(accountBan.data().reason,'Confirmed cheating');
+ await assertFails(getDoc(doc(player(),'users','player')));
+ await assertFails(updateDoc(doc(player(),'users','player'),{ffUsername:'New name'}));
+ await assertFails(clientFreeJoin('player'));
+ await assertSucceeds(moderate('player','account',false,2,'Reviewed appeal'));
+ await assertSucceeds(clientFreeJoin('player'));
+});
+test('players and guests cannot forge, lift, delete or inspect someone else’s bans',async()=>{
+ await provision();await seedFreeMatch();await moderate('player');
+ await assertFails(updateDoc(doc(player(),'accountBans','player'),{active:false}));
+ await assertFails(deleteDoc(doc(staff(),'accountBans','player')));
+ await assertFails(getDoc(doc(guest(),'accountBans','player')));
+ await assertFails(getDoc(doc(player(),'accountBans','other')));
+ await assertFails(setDoc(doc(player(),'matches/free/bans/other'),{uid:'other',active:true}));
+});
+test('bans require reason, sequential revision, protected target and atomic audit',async()=>{
+ await provision();await seedFreeMatch();
+ await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'users','operator'),{ffUsername:'Staff'}));
+ await assertFails(moderate('player','account',true,1,' '));
+ await assertFails(moderate('player','account',true,2));
+ await assertFails(moderate('operator'));
+ await assertFails(moderate('missing'));
+ const db=env.authenticatedContext('operator').firestore();
+ await assertFails(setDoc(doc(db,'accountBans','player'),{uid:'player',active:true,reason:'Cheating',revision:1,updatedAt:serverTimestamp(),updatedBy:'operator'}));
+ await moderate('player');await assertFails(moderate('player'));
+});
+test('match ban blocks only this match and lifting permits registration',async()=>{
+ await provision();await seedFreeMatch();
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'entries','player_free'),{uid:'player',match:'free',status:'requested'});});
+ await assertSucceeds(moderate('player','match'));
+ assert.equal((await assertSucceeds(getDoc(doc(player(),'matches/free/bans/player')))).data().reason,'Confirmed cheating');
+ await assertFails(getDoc(doc(env.authenticatedContext('other').firestore(),'matches/free/bans/player')));
+ await assertSucceeds(getDoc(doc(player(),'users','player')));
+ // Remove the pending fixture to attempt a fresh registration under the active ban.
+ await env.withSecurityRulesDisabled(async c=>{await deleteDoc(doc(c.firestore(),'entries','player_free'));});
+ await assertFails(clientFreeJoin('player'));
+ await assertSucceeds(clientFreeJoin('other'));
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'entries','player_free'),{uid:'player',match:'free',status:'requested'});});
+ await assertSucceeds(moderate('player','match',false,2,'Appeal accepted'));
+ await env.withSecurityRulesDisabled(async c=>{await deleteDoc(doc(c.firestore(),'entries','player_free'));await updateDoc(doc(c.firestore(),'matches','free'),{capacity:2});});
+ await assertSucceeds(clientFreeJoin('player'));
+});
+test('banning a confirmed participant revokes room reads without rewriting entry or seat count',async()=>{
+ await provision();await seedFreeMatch();await clientFreeJoin('player');
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'rooms','free'),{enabled:true,releaseAt:new Date(0),roomId:'123',password:'secret'});});
+ await assertSucceeds(getDoc(doc(player(),'rooms','free')));
+ await moderate('player','match');
+ await assertFails(getDoc(doc(player(),'rooms','free')));
+ assert.equal((await getDoc(doc(player(),'entries','player_free'))).data().status,'confirmed');
+ assert.equal((await getDoc(doc(player(),'matches','free'))).data().joined,1);
+ await moderate('player','match',false,2,'Appeal accepted');
+ await assertSucceeds(getDoc(doc(player(),'rooms','free')));
+});
+
+for(const status of ['draft','open','closed','live','review','settled','cancelled'])test(`staff can save and publish winners while match status is ${status}`,async()=>{
+ await seedWorkflow(status);
+ await assertSucceeds(writeDraft());
+ await assertSucceeds(publishResult());
+ assert.equal((await getDoc(doc(operator(),'matches/free'))).data().status,status);
 });

@@ -2,8 +2,8 @@ package bd.arena.prototype
 import org.junit.Assert.*
 import org.junit.Test
 class MatchLifecycleTest {
-    @Test fun newMatchesStartInDraftAndCannotSkipStates() {
-        assertEquals(listOf("draft"),matchStatusChoices(null,0))
+    @Test fun newMatchesStartOpenAndLaterTransitionsCannotSkipStates() {
+        assertEquals(listOf("open"),matchStatusChoices(null,0))
         assertEquals(listOf("open","closed","cancelled"),matchStatusChoices("open",0))
         assertEquals(listOf("closed","live","cancelled"),matchStatusChoices("closed",0))
         assertEquals(listOf("live","review","cancelled"),matchStatusChoices("live",0))

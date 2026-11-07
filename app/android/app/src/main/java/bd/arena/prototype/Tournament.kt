@@ -44,7 +44,7 @@ internal fun validRoster(mode:String,names:List<String>,captain:String):Boolean 
         names.map { it.lowercase(java.util.Locale.ROOT) }.distinct().size==names.size
 
 internal fun matchStatusChoices(current:String?,fee:Long):List<String> {
-    if(current==null)return listOf("draft")
+    if(current==null)return listOf("open")
     val next=when(current){"draft"->"open";"open"->"closed";"closed"->"live";"live"->"review";else->null}
     return listOfNotNull(current,next)+if(current in listOf("draft","open","closed","live"))listOf("cancelled")else emptyList()
 }

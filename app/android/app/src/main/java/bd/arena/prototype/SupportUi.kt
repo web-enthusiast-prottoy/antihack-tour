@@ -16,7 +16,13 @@ import com.google.firebase.firestore.*
 
 @OptIn(ExperimentalMaterial3Api::class,ExperimentalLayoutApi::class)
 @Composable
-internal fun SupportScreen(session:AdminSession,staff:Boolean,bangla:Boolean,back:()->Unit) {
+internal fun SupportScreen(
+    session: AdminSession,
+    bangla: Boolean,
+    back: () -> Unit,
+    reply: (@Composable (SupportData, DocumentSnapshot, () -> Unit) -> Unit)? = null
+) {
+    val staff = reply != null
     fun t(en:String,bn:String)=if(bangla)bn else en
     if(staff&&!session.allowed)return
     val data=remember(session.uid,staff){SupportData(session,staff)}
@@ -33,14 +39,14 @@ internal fun SupportScreen(session:AdminSession,staff:Boolean,bangla:Boolean,bac
         item {ScreenHeader(t(if(staff)"Support queue" else "Support requests",if(staff)"সহায়তার তালিকা" else "সহায়তার অনুরোধ"),back={goBack()},refresh={selected=null;data.load()},refreshEnabled=!data.loading&&!data.busy)}
         if(data.error.isNotBlank())item{Text(LocaleStrings.get(data.error),color=MaterialTheme.colorScheme.error)}
         if(selected==null) {
-            item {Text(t("Private requests for match or payment questions. Replies do not change wallet balances or guarantee a payout. Do not include passwords, PINs or OTPs.","ম্যাচ বা পেমেন্টের প্রশ্নের জন্য ব্যক্তিগত অনুরোধ। উত্তরে ওয়ালেট বদলায় না বা পেআউট নিশ্চিত হয় না। পাসওয়ার্ড, পিন বা ওটিপি দেবেন না।"))}
+            if (!staff) item {Text(t("Private requests for match or payment questions. Replies do not change wallet balances or guarantee a payout. Do not include passwords, PINs or OTPs.","ম্যাচ বা পেমেন্টের প্রশ্নের জন্য ব্যক্তিগত অনুরোধ। উত্তরে ওয়ালেট বদলায় না বা পেআউট নিশ্চিত হয় না। পাসওয়ার্ড, পিন বা ওটিপি দেবেন না।"))}
             if(!staff)item{Button(onClick={newRequest=true},enabled=!data.busy){Text(t("New request","নতুন অনুরোধ"))}}
             if(data.loading)item{LinearProgressIndicator(Modifier.fillMaxWidth())}
             if(!data.loading&&data.rows.isEmpty()&&data.error.isEmpty())item{Text(t("No support requests yet.","এখনো সহায়তার অনুরোধ নেই।"))}
             items(data.rows,key={it.id}){row -> Card(onClick={selected=row},modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text(row.getString("subject").orEmpty(),style=MaterialTheme.typography.titleMedium)
                 Text(supportStatus(row.getString("status").orEmpty(),bangla))
-                Text(row.id,style=MaterialTheme.typography.bodySmall)
+                if (!staff) Text(row.id,style=MaterialTheme.typography.bodySmall)
                 Text(supportDate(row.getTimestamp("createdAt")),style=MaterialTheme.typography.bodySmall)
             }}}
             if(data.more)item{OutlinedButton(onClick={data.load(false)},enabled=!data.loading){Text(LocaleStrings.get("Load more"))}}
@@ -54,16 +60,8 @@ internal fun SupportScreen(session:AdminSession,staff:Boolean,bangla:Boolean,bac
                 if(!record.getString("reference").isNullOrBlank())Text(t("Related reference: ","সংশ্লিষ্ট রেফারেন্স: ")+record.getString("reference"))
                 Text(record.getString("body").orEmpty())
             }}}
-            item {SupportReplies(session,record,bangla)}
-            if(staff)item {
-                var response by rememberSaveable(record.id){mutableStateOf("")}
-                var status by rememberSaveable(record.id){mutableStateOf("review")}
-                Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(response,{response=it},label={Text(t("Reply (up to 4000 characters)","উত্তর (সর্বোচ্চ ৪০০০ অক্ষর)"))},modifier=Modifier.fillMaxWidth(),minLines=3,enabled=!data.busy,isError=response.trim().length>4000)
-                    FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {listOf("open","review","resolved").forEach{value->FilterChip(status==value,{status=value},label={Text(supportStatus(value,bangla))},enabled=!data.busy)}}
-                    Button(onClick={data.reply(record,response.trim(),status){selected=null}},enabled=!data.busy&&response.isNotBlank()&&response.trim().length<=4000){Text(t(if(data.busy)"Saving…" else "Save reply and status",if(data.busy)"সংরক্ষণ হচ্ছে…" else "উত্তর ও অবস্থা সংরক্ষণ"))}
-                }
-            }
+            item {SupportReplies(record,bangla)}
+            if (reply != null) item { reply(data, record) { selected = null } }
         }
     }
     if(newRequest)ModalBottomSheet(onDismissRequest={if(!data.busy)newRequest=false}) {
@@ -81,7 +79,7 @@ internal fun SupportScreen(session:AdminSession,staff:Boolean,bangla:Boolean,bac
 internal fun supportStatus(status:String,bangla:Boolean)=if(!bangla)when(status){"open"->"Open";"review"->"Under review";else->"Resolved"}else when(status){"open"->"খোলা";"review"->"পর্যালোচনাধীন";else->"সমাধান হয়েছে"}
 
 @Composable
-private fun SupportReplies(session:AdminSession,record:DocumentSnapshot,bangla:Boolean) {
+private fun SupportReplies(record:DocumentSnapshot,bangla:Boolean) {
     var replies by remember(record.id){mutableStateOf<List<DocumentSnapshot>>(emptyList())}
     var cursor by remember(record.id){mutableStateOf<DocumentSnapshot?>(null)}
     var page by remember(record.id){mutableStateOf(0)}

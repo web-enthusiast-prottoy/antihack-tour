@@ -6,7 +6,7 @@ const require=createRequire(new URL('../../admin/package.json',import.meta.url))
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
 const {doc,setDoc,getDoc,getDocs,collection,query,where,limit,writeBatch,runTransaction,serverTimestamp,updateDoc,deleteDoc}=require('firebase/firestore');
 let env;
-before(async()=>{env=await initializeTestEnvironment({projectId:'demo-arena-settlement',firestore:{host:'127.0.0.1',port:8080,rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});});
+before(async()=>{env=await initializeTestEnvironment({projectId:'demo-arena-settlement',firestore:{host:'127.0.0.1',port:Number(process.env.ARENA_RULES_PORT??8080),rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});});
 after(async()=>{await env.clearFirestore();await env.cleanup();});
 const staff=(uid='operator')=>env.authenticatedContext(uid).firestore();
 const resultId=uid=>({one:'A',two:'B',three:'C',four:'D'}[uid].repeat(20));
@@ -139,7 +139,7 @@ test('configured draft awards must equal the saved position plus kill reward',as
   batch.set(doc(db,'auditRecords/draft_one_m_1'),{action:'saveResultDraft',path:'resultDrafts/one_m',actor:'operator',at:serverTimestamp()});
   return batch.commit();
  }
- await assertFails(draft({awardPaisa:52001}));await assertFails(draft({placement:5,kills:0,awardPaisa:0}));await assertSucceeds(draft());
+ await assertFails(draft({awardPaisa:52001}));await assertFails(draft({placement:49,kills:0,awardPaisa:0}));await assertSucceeds(draft());
 });
 async function complete(empty=false) {
  const db=staff(),ref=doc(db,'matches/m'),old=(await getDoc(ref)).data();
@@ -168,4 +168,21 @@ test('an empty match can complete with an explicit zero settlement and no wallet
  await assertFails(complete());await assertSucceeds(complete(true));
  assert.equal((await getDoc(doc(staff(),'wallets/one'))).data().balance,7000);
  assert.equal((await getDoc(doc(staff(),'wallets/one'))).data().winnings,undefined);
+});
+
+for(const status of ['draft','open','closed','live','review','settled','cancelled'])test(`a saved winner credits exactly once with match status ${status}`,async()=>{
+ await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'matches/m'),{status}));
+ await assertSucceeds(credit());
+ assert.equal(await credit(),'existing');
+ assert.equal((await getDoc(doc(staff(),'wallets/one'))).data().winnings,52000);
+ assert.equal((await getDoc(doc(staff(),'matches/m'))).data().status,status);
+});
+test('a configured prize position above the participant count can credit a confirmed entrant',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{
+  const db=c.firestore();
+  await setDoc(doc(db,'matches/m/prizes/5'),{rank:5,amountPaisa:12000});
+  await updateDoc(doc(db,`results/${resultId('one')}`),{placement:5,kills:1,awardPaisa:12500});
+ });
+ await assertSucceeds(credit());
+ assert.equal((await getDoc(doc(staff(),'wallets/one'))).data().winnings,12500);
 });

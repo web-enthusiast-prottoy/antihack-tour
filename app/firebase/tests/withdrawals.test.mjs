@@ -8,7 +8,7 @@ const {doc,getDoc,setDoc,updateDoc,getDocs,collection,query,where,limit,runTrans
 let env;
 const id='A'.repeat(20),otherId='B'.repeat(20);
 const client=(uid='player')=>env.authenticatedContext(uid).firestore();
-before(async()=>{env=await initializeTestEnvironment({projectId:'demo-arena-withdrawals',firestore:{host:'127.0.0.1',port:8080,rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});});
+before(async()=>{env=await initializeTestEnvironment({projectId:'demo-arena-withdrawals',firestore:{host:'127.0.0.1',port:Number(process.env.ARENA_RULES_PORT??8080),rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});});
 after(async()=>{await env.clearFirestore();await env.cleanup();});
 beforeEach(async()=>{
  await env.clearFirestore();await env.withSecurityRulesDisabled(async c=>{
@@ -127,4 +127,25 @@ test('concurrent reservations cannot overspend and racing sent decisions debit o
  const winner=claims[0].status==='fulfilled'?id:otherId;await decide(winner);
  await Promise.all([retryRace(()=>decide(winner,'sent')),retryRace(()=>decide(winner,'sent',{actor:'other'}))]);
  assert.equal((await wallet()).winnings,39500);assert.equal((await wallet()).reservedWinnings,0);assert.equal((await wallet()).balance,50000);
+});
+
+test('a paid entry and withdrawal cannot spend the same available winnings',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{
+  await updateDoc(doc(c.firestore(),'wallets/player'),{balance:0,winnings:25000});
+  await setDoc(doc(c.firestore(),'matches/paid'),{status:'open',mode:'solo',entryPaisa:20000,joined:0,capacity:1});
+ });
+ const join=()=>{const db=client();return runTransaction(db,async tx=>{
+  const entry='player_paid',publicId='C'.repeat(20);
+  const w=(await tx.get(doc(db,'wallets/player'))).data(),match=(await tx.get(doc(db,'matches/paid'))).data();
+  tx.set(doc(db,'entries/'+entry),{uid:'player',match:'paid',username:'Sample winner',roster:['Sample winner'],status:'confirmed',fee:20000,createdAt:serverTimestamp(),publicId,avatar:'solo'});
+  tx.update(doc(db,'wallets/player'),{winnings:w.winnings-20000,lastEntry:entry});
+  tx.update(doc(db,'matches/paid'),{joined:match.joined+1,lastEntry:entry});
+  tx.set(doc(db,'participantLinks/'+publicId),{entry});
+  tx.set(doc(db,'matches/paid/participants/'+publicId),{username:'Sample winner',roster:['Sample winner'],avatar:'solo'});
+  tx.set(doc(db,'walletLedger/entry_'+entry),{uid:'player',delta:-20000,type:'entry_fee',status:'completed',currency:'BDT',entry,match:'paid',reference:'paid',balanceAfter:0,depositPortion:0,winningsPortion:20000,winningsAfter:w.winnings-20000,at:serverTimestamp()});
+ });};
+ const outcomes=await Promise.allSettled([retryRace(join),retryRace(()=>request())]);
+ assert.equal(outcomes.filter(r=>r.status==='fulfilled').length,1);
+ const w=await wallet();assert.equal(w.balance,0);assert.ok(w.winnings>=0);
+ assert.equal(w.winnings+w.reservedWinnings+(outcomes[0].status==='fulfilled'?20000:0),25000);
 });

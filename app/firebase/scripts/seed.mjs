@@ -19,6 +19,7 @@ console.log('Local demo publisher ready. Sign in: admin@arena.test / ArenaLocal1
 // Clearly labelled, disposable preview records; never overwrite staff edits.
 const db=getFirestore();
 const fixtures={
+ 'paymentInstructions/bkash':{number:'01889898989',enabled:true,revision:1,updatedAt:FieldValue.serverTimestamp()},
  'categories/sample-full-map':{name:'Full Map',order:0,active:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:user.uid},
  'categories/sample-clash-squad':{name:'Clash Squad',order:1,active:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:user.uid},
  'categories/sample-duo-battle':{name:'Duo Battle',order:2,active:true,updatedAt:FieldValue.serverTimestamp(),updatedBy:user.uid},

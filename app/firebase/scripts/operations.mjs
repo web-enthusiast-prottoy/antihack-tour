@@ -24,6 +24,8 @@ function publishRoster(tx,entry,data,avatar) {
  return {publicId,avatar};
 }
 export async function operate(uid, action, data) {
+ const automaticSms=action==='autoApproveDeposit';
+ if(automaticSms) action='approveDeposit';
  const user=db.doc(`users/${uid}`), wallet=db.doc(`wallets/${uid}`);
  if(action==='deposit') {
   const amount=Number(data.amount),reference=String(data.reference||'').trim().toUpperCase(),sender=String(data.sender||'').trim();
@@ -32,6 +34,7 @@ export async function operate(uid, action, data) {
   const provider='demo-bkash',ref=db.doc(`depositRequests/${uid}_${requestId}`);
   const status=await db.runTransaction(async tx=>{
    const old=await tx.get(ref),instructions=await tx.get(db.doc('paymentInstructions/bkash'));
+   if((await tx.get(db.doc(`accountBans/${uid}`))).get('active')===true)throw Error('This account is banned.');
    const receiver=instructions.get('number')||'01889898989';
    if(old.exists) {
     const d=old.data();
@@ -48,6 +51,8 @@ export async function operate(uid, action, data) {
   const match=db.doc(`matches/${id}`), entry=db.doc(`entries/${uid}_${id}`);
   await db.runTransaction(async tx=>{
    const [m,p,w,e]=await Promise.all([tx.get(match),tx.get(user),tx.get(wallet),tx.get(entry)]);
+   const accountBan=await tx.get(db.doc(`accountBans/${uid}`)),matchBan=await tx.get(db.doc(`matches/${id}/bans/${uid}`));
+   if(accountBan.get('active')===true||matchBan.get('active')===true)throw Error('This account is banned from registration.');
    if(e.exists) return;
    const d=m.data(); if(!d||d.status!=='open'||(d.joined||0)>=d.capacity) throw Error('Match full or closed.');
    if(!p.get('ffUsername')?.trim()) throw Error('Add your Free Fire username first.');
@@ -64,7 +69,8 @@ export async function operate(uid, action, data) {
  const id=String(data.id||''); if(!id.match(/^[\w-]+$/)) throw Error('Invalid request');
  const ref=db.doc(`${path}/${id}`);
  await db.runTransaction(async tx=>{
-  if(!(await tx.get(db.doc(`staffRoles/${uid}`))).get('admin')) throw Error('Staff access required.');
+  const role=await tx.get(db.doc(`staffRoles/${uid}`));
+  if(!role.get('admin')||(automaticSms&&!role.get('owner'))) throw Error('Staff access required.');
   const r=await tx.get(ref); if(!r.exists) throw Error('Request missing'); const d=r.data();
   if(d.status===(action==='approveDeposit'?'approved':action==='rejectDeposit'?'rejected':'confirmed')) return;
   if(d.status!==(action==='confirmEntry'?'requested':'pending')) throw Error('Request is no longer pending');
@@ -77,14 +83,28 @@ export async function operate(uid, action, data) {
   if(!Number.isSafeInteger(balance)||balance<0)throw Error('Wallet balance requires reconciliation.');
   if(action==='approveDeposit') {
    if(!Number.isSafeInteger(d.amount)||d.amount<=0||d.amount>10000000||!/^01[3-9][0-9]{8}$/.test(d.receiver)||data.receiptConfirmed!==true||Number(data.verifiedAmount)!==d.amount||String(data.verifiedReference||'').trim().toUpperCase()!==d.reference||String(data.verifiedSender||'').trim()!==d.sender||data.verifiedReceiver!==d.receiver||d.provider!=='demo-bkash'||d.currency!=='BDT')throw Error('Receipt details differ. Reject with a discrepancy reason; do not change the claim.');
+   if(automaticSms) {
+    const instructions=await tx.get(db.doc('paymentInstructions/bkash'));
+    const receivingNumber=instructions.get('number')||'01889898989';
+    if(instructions.get('enabled')===false||d.receiver!==receivingNumber) throw Error('The receiving account changed.');
+    const now=Date.now(), window=7*24*60*60*1000;
+    const createdAt=d.createdAt?.toMillis();
+    if(!Number.isSafeInteger(data.paidAtMillis)||!Number.isFinite(createdAt)||now-createdAt>window||
+       data.paidAtMillis<now-window||data.paidAtMillis>now+60000) throw Error('Receipt is outside the automatic review window.');
+    const competing=await tx.get(db.collection('depositRequests').where('receiver','==',d.receiver)
+      .where('reference','==',d.reference).where('status','==','pending').limit(2));
+    if(competing.size!==1) throw Error('Multiple pending claims for this receipt. Review manually.');
+   }
    if(!Number.isSafeInteger(balance+d.amount))throw Error('Wallet balance limit exceeded.');
    const unique=db.doc(`paymentReferences/${d.provider}_${d.receiver}_${d.reference}`), used=await tx.get(unique),legacy=await tx.get(db.doc(`paymentReferences/${d.reference}`)),oldScoped=await tx.get(db.doc(`paymentReferences/demo-bkash_LOCAL-TEST-RECEIVER_${d.reference}`));
    if(used.exists||legacy.exists||oldScoped.exists) throw Error('This transfer reference has already been credited.');
    tx.create(unique,{request:id,provider:d.provider,receiver:d.receiver,reference:d.reference,verifiedBy:uid,verifiedAt:FieldValue.serverTimestamp()}); tx.set(wref,{balance:balance+d.amount},{merge:true});
    tx.create(db.doc(`ledger/deposit_${id}`),{uid:d.uid,delta:d.amount,type:'deposit',status:'completed',currency:'BDT',request:id,reference:d.reference,provider:d.provider,receiver:d.receiver,balanceAfter:balance+d.amount,at:FieldValue.serverTimestamp()});
-   tx.update(ref,{status:'approved',decisionReason:'Test receipt checked against the submitted claim.',reviewedBy:uid,reviewedAt:FieldValue.serverTimestamp()});
+   tx.update(ref,{status:'approved',decisionReason:automaticSms?'Sample receipt matched by SMS.':'Test receipt checked against the submitted claim.',reviewedBy:uid,reviewedAt:FieldValue.serverTimestamp()});
   } else {
    const mref=db.doc(`matches/${d.match}`), m=await tx.get(mref), p=await tx.get(db.doc(`users/${d.uid}`));
+   const accountBan=await tx.get(db.doc(`accountBans/${d.uid}`)),matchBan=await tx.get(db.doc(`matches/${d.match}/bans/${d.uid}`));
+   if(accountBan.get('active')===true||matchBan.get('active')===true)throw Error('This account is banned from registration.');
    if(m.get('status')!=='open'||(m.get('joined')||0)>=m.get('capacity')) throw Error('Match full or closed');
    checkedRoster(m.get('mode'),d.roster,d.username);
    if(!Number.isSafeInteger(d.fee)||d.fee<0||!p.get('ffUsername')?.trim()||balance<d.fee||m.get('entryPaisa')!==d.fee) throw Error('Profile, funds or entry fee changed.');
@@ -93,7 +113,7 @@ export async function operate(uid, action, data) {
    const published=publishRoster(tx,ref,d,p.get('avatar')||'solo');
    tx.update(ref,{status:'confirmed',reviewedBy:uid,...published});
   }
-  tx.create(db.collection('auditRecords').doc(),{action,path:ref.path,actor:uid,at:FieldValue.serverTimestamp()});
+  tx.create(db.collection('auditRecords').doc(),{action:automaticSms?'autoApproveDeposit':action,path:ref.path,actor:uid,at:FieldValue.serverTimestamp()});
  }); return action==='rejectDeposit'?'Rejected. No funds were credited.':'Approved.';
 }
 const server=createServer(async(req,res)=>{

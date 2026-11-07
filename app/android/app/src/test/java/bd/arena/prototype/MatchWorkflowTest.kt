@@ -18,4 +18,11 @@ class MatchWorkflowTest {
     @Test fun nestedValidationFailureKeepsAnActionableMessage() {
         assertEquals("Move the match to results review first.",workflowFailure(RuntimeException(IllegalArgumentException("Move the match to results review first."))))
     }
+    @Test fun savingAnUnchangedMinutePreservesLockedSecondsAndNanoseconds() {
+        val original=com.google.firebase.Timestamp(1793522407L,123456789)
+        val displayed=original.toDate().toInstant().atZone(java.time.ZoneId.of("Asia/Dhaka")).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        assertEquals(original,matchEditorTimestamp(original,displayed))
+        assertNotEquals(original,matchEditorTimestamp(original,"2026-11-07 23:59"))
+        assertEquals(releaseTimestamp(displayed),matchEditorTimestamp(null,displayed))
+    }
 }

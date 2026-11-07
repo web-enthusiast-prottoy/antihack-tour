@@ -8,6 +8,36 @@ service cloud.firestore {
     function owner() {
       return admin() && get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.owner == true;
     }
+    function accountAllowed(uid) {
+      let path = /databases/$(database)/documents/accountBans/$(uid);
+      return !exists(path) || get(path).data.active == false;
+    }
+    function activeAccount() { return request.auth != null && accountAllowed(request.auth.uid); }
+    function matchAllowed(uid, id) {
+      let path = /databases/$(database)/documents/matches/$(id)/bans/$(uid);
+      return accountAllowed(uid) && (!exists(path) || get(path).data.active == false);
+    }
+    function validBan(path, key) {
+      let d = request.resource.data;
+      return admin() && !exists(/databases/$(database)/documents/staffRoles/$(d.uid)) &&
+        exists(/databases/$(database)/documents/users/$(d.uid)) &&
+        d.keys().hasAll(['uid','active','reason','revision','updatedAt','updatedBy']) &&
+        d.keys().hasOnly(['uid','active','reason','revision','updatedAt','updatedBy']) &&
+        d.active is bool && d.reason is string && d.reason.size() > 0 && d.reason.size() <= 1000 &&
+        d.reason.matches('(?s).*\\S.*') && d.updatedAt == request.time && d.updatedBy == request.auth.uid &&
+        d.revision is int && d.revision == (resource == null ? 1 : resource.data.revision + 1) &&
+        audited('ban_' + key + '_' + string(d.revision), 'moderatePlayer', path) &&
+        getAfter(/databases/$(database)/documents/auditRecords/$('ban_' + key + '_' + string(d.revision))).data.reason == d.reason;
+    }
+    match /accountBans/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || admin());
+      allow create, update: if request.resource.data.uid == uid && validBan('accountBans/' + uid, 'account_' + uid);
+    }
+    match /matches/{id}/bans/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || admin());
+      allow create, update: if request.resource.data.uid == uid &&
+        exists(/databases/$(database)/documents/entries/$(uid + '_' + id)) && validBan('matches/' + id + '/bans/' + uid, 'match_' + id + '_' + uid);
+    }
     function bounded() { return request.query.limit != null && request.query.limit <= 100; }
     function validArtwork(d) {
       let id=d.get('artworkId','');
@@ -52,7 +82,7 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /staffRoles/{uid} {
-      allow get: if request.auth != null && (request.auth.uid == uid || owner());
+      allow get: if activeAccount() && (request.auth.uid == uid || owner());
       allow list: if owner() && bounded();
       allow create, update: if owner() && uid != request.auth.uid &&
         (!exists(/databases/$(database)/documents/staffRoles/$(uid)) || resource.data.get('owner', false) == false) &&
@@ -61,14 +91,98 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
       allow delete: if false;
     }
+    function validScheduleTemplate(t) {
+      return t.keys().hasAll(['title','description','image','mode','map','capacity','entryPaisa','prizePaisa','perKillPaisa','rules','cancellationTerms','categoryId','artworkId']) &&
+        t.keys().hasOnly(['title','description','image','mode','map','capacity','entryPaisa','prizePaisa','perKillPaisa','rules','cancellationTerms','categoryId','artworkId']) &&
+        t.title is string && t.title.size() > 0 && t.title.size() <= 80 && t.title.matches('(?s).*\\S.*') &&
+        t.description is string && t.description.size() <= 4000 && t.map is string && t.map.size() <= 1000 &&
+        t.image in ['solo','duo','squad'] && t.mode in ['solo','duo','squad'] &&
+        t.capacity is int && t.capacity >= 1 && t.capacity <= 1000 &&
+        t.entryPaisa is int && t.entryPaisa >= 0 && t.entryPaisa <= 9007199254740991 &&
+        t.prizePaisa is int && t.prizePaisa > 0 && t.prizePaisa <= 9007199254740991 &&
+        t.perKillPaisa is int && t.perKillPaisa >= 0 && t.perKillPaisa <= 9007199254740991 &&
+        t.rules is string && t.rules.size() <= 4000 && t.cancellationTerms is string && t.cancellationTerms.size() <= 4000 &&
+        t.categoryId is string && t.categoryId.size() <= 150 && (t.categoryId == '' || get(/databases/$(database)/documents/categories/$(t.categoryId)).data.active == true) && validArtwork(t);
+    }
+    match /matchSchedules/{id} {
+      allow read: if admin() && (request.method == 'get' || bounded());
+      allow create: if admin() && id.matches('[A-Za-z0-9]{20}') &&
+        request.resource.data.keys().hasAll(['template','prizes','dateFrom','dateTo','fromMinute','toMinute','delayMinutes','timezone','state','revision','createdAt','createdBy','updatedAt','updatedBy']) &&
+        request.resource.data.keys().hasOnly(['template','prizes','dateFrom','dateTo','fromMinute','toMinute','delayMinutes','timezone','state','revision','createdAt','createdBy','updatedAt','updatedBy']) &&
+        validScheduleTemplate(request.resource.data.template) && request.resource.data.prizes is list &&
+        request.resource.data.prizes.size() >= 1 && request.resource.data.prizes.size() <= 400 && request.resource.data.prizes.size() <= request.resource.data.template.capacity &&
+        request.resource.data.dateFrom is string && request.resource.data.dateFrom.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') &&
+        request.resource.data.dateTo is string && request.resource.data.dateTo.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && request.resource.data.dateFrom <= request.resource.data.dateTo &&
+        request.resource.data.fromMinute is int && request.resource.data.fromMinute >= 0 &&
+        request.resource.data.toMinute is int && request.resource.data.toMinute <= 1439 && request.resource.data.toMinute > request.resource.data.fromMinute &&
+        request.resource.data.delayMinutes is int && request.resource.data.delayMinutes >= 1 && request.resource.data.delayMinutes <= 1440 &&
+        request.resource.data.timezone == 'Asia/Dhaka' && request.resource.data.state == 'active' && request.resource.data.revision == 1 &&
+        request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time &&
+        audited('schedule_' + id + '_1','saveMatchSchedule','matchSchedules/' + id);
+      allow update: if admin() && resource.data.state in ['active','paused'] && request.resource.data.state in ['active','paused','stopped','completed'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','revision','updatedAt','updatedBy']) &&
+        request.resource.data.revision == resource.data.revision + 1 && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid &&
+        audited('schedule_' + id + '_' + string(request.resource.data.revision),'saveMatchSchedule','matchSchedules/' + id);
+      match /runs/{run} {
+        allow read: if admin() && (request.method == 'get' || bounded());
+        allow create: if admin() && validScheduledRun(id,run);
+      }
+    }
+    match /schedulerStatus/{id} {
+      allow read: if admin() && id == 'matches' && request.method == 'get';
+    }
+    match /matchScheduleProgress/{id} {
+      allow read: if admin() && (request.method == 'get' || bounded());
+      allow create, update: if admin() && validScheduleProgress(id);
+    }
+    function validScheduledRun(id, run) {
+      let s = get(/databases/$(database)/documents/matchSchedules/$(id)).data;
+      let p = getAfter(/databases/$(database)/documents/matchScheduleProgress/$(id)).data;
+      let d = request.resource.data;
+      let m = getAfter(/databases/$(database)/documents/matches/$(d.match)).data;
+      return s.state == 'active' && d.keys().hasAll(['sequence','match','createdAt','scheduleRevision']) &&
+        d.keys().hasOnly(['sequence','match','createdAt','scheduleRevision','startsAt']) && d.sequence is int && d.sequence >= 1 &&
+        run == string(d.sequence) && d.match == 'schedule_' + id + '_' + run &&
+        d.createdAt == request.time && d.scheduleRevision == s.revision &&
+        (!('startsAt' in d) || (d.startsAt is timestamp && d.startsAt == m.startsAt)) &&
+        p.sequence == d.sequence && p.lastMatch == d.match && p.phase in ['publishing','waiting'] && p.updatedAt == request.time &&
+        !exists(/databases/$(database)/documents/matches/$(d.match)) &&
+        m.diff(s.template).affectedKeys().hasOnly(['startsAt','joined','status','revision','cancellationReason','independentPrizeTotal','prizesEnabled','prizeRank','prizeMaxRank','updatedAt','updatedBy']) &&
+        ((p.phase == 'publishing' && m.status == 'draft') || (p.phase == 'waiting' && m.status == 'open')) &&
+        m.revision == 1 && m.joined == 0 && m.prizesEnabled == true && m.prizeMaxRank == s.prizes.size();
+    }
+    // Scheduling is an admin operation, like manually creating matches. Financial credit rules stay unchanged.
+    function validScheduleProgress(id) {
+      let d = request.resource.data;
+      let old = resource == null ? {} : resource.data;
+      let s = get(/databases/$(database)/documents/matchSchedules/$(id)).data;
+      return d.keys().hasAll(['sequence','lastMatch','phase','nextAt','error','updatedAt']) &&
+        d.keys().hasOnly(['sequence','lastMatch','phase','nextAt','error','updatedAt']) &&
+        s.state == 'active' && d.updatedAt == request.time && d.sequence is int && d.sequence >= 0 &&
+        d.lastMatch is string && d.error is string && d.error.size() <= 1000 &&
+        (d.nextAt == null || d.nextAt is timestamp) && d.phase in ['publishing','waiting','queued','blocked','completed'] &&
+        ((d.sequence == old.get('sequence',0) && d.lastMatch == old.get('lastMatch','') &&
+          (d.phase != 'publishing' || old.get('phase','') == 'publishing') &&
+          (old.get('phase','') != 'publishing' || d.phase != 'waiting' || getAfter(/databases/$(database)/documents/matches/$(d.lastMatch)).data.status != 'draft')) ||
+         (d.sequence == old.get('sequence',0) + 1 && old.get('phase','') != 'publishing' &&
+          d.lastMatch == 'schedule_' + id + '_' + string(d.sequence) && d.phase in ['publishing','waiting'] &&
+          !exists(/databases/$(database)/documents/matchSchedules/$(id)/runs/$(string(d.sequence))) &&
+          getAfter(/databases/$(database)/documents/matchSchedules/$(id)/runs/$(string(d.sequence))).data.match == d.lastMatch &&
+          getAfter(/databases/$(database)/documents/matchSchedules/$(id)/runs/$(string(d.sequence))).data.createdAt == request.time));
+    }
     match /matches/{id} {
+      allow delete: if owner() && audited('deleteMatch_' + id,'deleteMatch','matches/' + id);
       // A free seat and its immutable entry must be committed together. No wallet writes.
-      allow update: if request.auth != null && freeSeatClaim(id);
-      allow update: if admin() && request.resource.data.keys().hasAll(['lastEntry']) && paidSeatClaim(id);
+      allow update: if activeAccount() && freeSeatClaim(id);
+      allow update: if activeAccount() && request.resource.data.keys().hasAll(['lastEntry']) && paidSeatClaim(id);
       allow read: if (admin() || resource.data.status != 'draft') && (request.method == 'get' || bounded() || admin());
-      allow create, update: if admin() && request.resource.data.keys().hasOnly(['lastEntry','prizesEnabled','prizeRank','prizeMaxRank','joined','artworkId','categoryId','title','description','image','mode','map','startsAt','capacity','entryPaisa','prizePaisa','perKillPaisa','rules','cancellationTerms','status','updatedAt','updatedBy','revision','cancellationReason','cancelledAt']) &&
+      allow create, update: if admin() && request.resource.data.keys().hasOnly(['independentPrizeTotal','lastEntry','prizesEnabled','prizeRank','prizeMaxRank','joined','artworkId','categoryId','title','description','image','mode','map','startsAt','capacity','entryPaisa','prizePaisa','perKillPaisa','rules','cancellationTerms','status','updatedAt','updatedBy','revision','cancellationReason','cancelledAt']) &&
         request.resource.data.get('joined',0) == (resource == null ? 0 : resource.data.get('joined',0)) &&
-        validArtwork(request.resource.data) && request.resource.data.get('categoryId','') is string && (request.resource.data.get('categoryId','') == '' || exists(/databases/$(database)/documents/categories/$(request.resource.data.categoryId))) &&
+        validArtwork(request.resource.data) && request.resource.data.get('categoryId','') is string && (request.resource.data.get('categoryId','') == '' ||
+          (exists(/databases/$(database)/documents/categories/$(request.resource.data.categoryId)) &&
+           ((resource != null && request.resource.data.categoryId == resource.data.get('categoryId','')) ||
+            get(/databases/$(database)/documents/categories/$(request.resource.data.categoryId)).data.active == true))) &&
         request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80 &&
         request.resource.data.description is string && request.resource.data.description.size() <= 4000 &&
         request.resource.data.image in ['solo','duo','squad'] && request.resource.data.mode in ['solo','duo','squad'] &&
@@ -90,18 +204,21 @@ service cloud.firestore {
       let maxRank = old.get('prizeMaxRank',0);
       return (enabled || !exists(path)) && d.prizeRank >= 1 && d.prizeRank <= d.capacity &&
         after.rank == d.prizeRank && after.matchRevision == d.revision && after.updatedAt == request.time &&
-        d.prizePaisa == (enabled ? old.prizePaisa : 0) - before.get('amountPaisa',0) + after.amountPaisa &&
+        (d.get('independentPrizeTotal',false) ? d.prizePaisa == old.prizePaisa : d.prizePaisa == (enabled ? old.prizePaisa : 0) - before.get('amountPaisa',0) + after.amountPaisa) &&
         d.prizeMaxRank == (d.prizeRank > maxRank ? d.prizeRank : maxRank);
     }
     function validPrizeSummary(id) {
       let d = request.resource.data;
       let old = resource == null ? {} : resource.data;
-      return d.get('prizesEnabled',false) is bool && d.get('prizeRank',0) is int &&
+      return d.get('independentPrizeTotal',false) is bool &&
+        (resource == null || d.get('independentPrizeTotal',false) == old.get('independentPrizeTotal',false)) &&
+        d.prizePaisa <= 9007199254740991 && d.get('prizesEnabled',false) is bool && d.get('prizeRank',0) is int &&
         d.get('prizeMaxRank',0) is int && d.get('prizeMaxRank',0) >= 0 && d.get('prizeMaxRank',0) <= d.capacity &&
         (!d.get('prizesEnabled',false) ?
           (!old.get('prizesEnabled',false) && d.get('prizeRank',0) == 0 && d.get('prizeMaxRank',0) == 0) :
           (d.prizePaisa <= 9007199254740991 &&
-            ((old.get('prizesEnabled',false) && d.prizePaisa == old.prizePaisa && d.prizeRank == old.prizeRank && d.prizeMaxRank == old.prizeMaxRank) || prizeDelta(id,d,old))));
+            ((resource == null && d.get('independentPrizeTotal',false) && d.prizeRank == 0) ||
+            (old.get('prizesEnabled',false) && (d.get('independentPrizeTotal',false) || d.prizePaisa == old.prizePaisa) && d.prizeRank == old.prizeRank && d.prizeMaxRank == old.prizeMaxRank) || prizeDelta(id,d,old))));
     }
     match /matches/{id}/prizes/{rank} {
       allow read: if (admin() || get(/databases/$(database)/documents/matches/$(id)).data.status != 'draft') &&
@@ -110,15 +227,16 @@ service cloud.firestore {
     }
     function validPrizePosition(id, rank) {
       let d = request.resource.data;
-      let old = get(/databases/$(database)/documents/matches/$(id)).data;
+      let old = exists(/databases/$(database)/documents/matches/$(id)) ? get(/databases/$(database)/documents/matches/$(id)).data : {};
       let m = getAfter(/databases/$(database)/documents/matches/$(id)).data;
       return d.keys().hasAll(['rank','amountPaisa','matchRevision','updatedAt']) &&
         d.keys().hasOnly(['rank','amountPaisa','matchRevision','updatedAt']) &&
         d.rank is int && rank == string(d.rank) && d.rank >= 1 && d.rank <= m.capacity &&
         d.amountPaisa is int && d.amountPaisa >= 0 && d.amountPaisa <= 9007199254740991 &&
         d.matchRevision == m.revision && m.revision == old.get('revision',0) + 1 &&
-        old.get('joined',0) == 0 && old.status in ['draft','open'] && m.status == old.status &&
-        m.prizesEnabled == true && m.prizeRank == d.rank && d.updatedAt == request.time && prizeDelta(id,m,old);
+        m.prizesEnabled == true && d.updatedAt == request.time &&
+        ((old.size() == 0 && m.get('independentPrizeTotal',false) && m.status in ['draft','open'] && m.prizeRank == 0 && d.rank <= m.prizeMaxRank) ||
+         (m.status == old.status && m.prizeRank == d.rank && prizeDelta(id,m,old)));
     }
     function settlementComplete(id, old) {
       let progress = getAfter(/databases/$(database)/documents/matchSettlements/$(id)).data;
@@ -130,21 +248,22 @@ service cloud.firestore {
       let from = old.get('status','none');
       let event = getAfter(/databases/$(database)/documents/matches/$(id)/history/$(string(d.revision))).data;
       return d.get('lastEntry','') == old.get('lastEntry','') && d.revision is int && d.revision == old.get('revision',0) + 1 &&
-        ((from == 'none' && d.status == 'draft') ||
+        ((from in ['cancelled','settled'] && d.status == from && d.diff(old).affectedKeys().hasOnly(['prizesEnabled','prizeRank','prizeMaxRank','prizePaisa','revision','updatedAt','updatedBy'])) ||
+         (from == 'none' && d.status in ['draft','open']) ||
          (from in ['draft','open','closed','live','review'] && (d.status == from ||
           (from == 'draft' && d.status == 'open') || (from == 'open' && d.status == 'closed') ||
           (from == 'closed' && d.status == 'live') || (from == 'live' && d.status == 'review') ||
           (from == 'review' && d.status == 'settled' && settlementComplete(id,old)) ||
           (d.status == 'cancelled' && from in ['draft','open','closed','live'])))) &&
-        (old.get('joined',0) == 0 || !d.diff(old).affectedKeys().hasAny(['prizesEnabled','prizeRank','prizeMaxRank','mode','map','startsAt','capacity','entryPaisa','prizePaisa','perKillPaisa','rules','cancellationTerms'])) &&
+        (old.get('joined',0) == 0 || !d.diff(old).affectedKeys().hasAny(['mode','map','startsAt','capacity','entryPaisa','perKillPaisa','rules','cancellationTerms'])) &&
         (d.status != 'cancelled' ? (d.get('cancellationReason','') == '' && !('cancelledAt' in d)) :
-          (d.cancellationReason is string && d.cancellationReason.size() > 0 && d.cancellationReason.size() <= 1000 && d.cancellationReason.matches('(?s).*\\S.*') && d.cancelledAt == request.time)) &&
+          (d.cancellationReason is string && d.cancellationReason.size() > 0 && d.cancellationReason.size() <= 1000 && d.cancellationReason.matches('(?s).*\\S.*') && (d.cancelledAt == request.time || (from == 'cancelled' && d.cancelledAt == old.cancelledAt && d.cancellationReason == old.cancellationReason)))) &&
         event.keys().hasAll(['from','to','reason','at']) && event.keys().hasOnly(['from','to','reason','at']) &&
         event.from == from && event.to == d.status && event.reason == d.get('cancellationReason','') && event.at == request.time &&
         audited('match_' + id + '_' + string(d.revision),'saveMatch','matches/' + id);
     }
     match /matches/{id}/history/{revision} {
-      allow read: if request.auth != null && (admin() || get(/databases/$(database)/documents/matches/$(id)).data.status != 'draft') &&
+      allow read: if activeAccount() && (admin() || get(/databases/$(database)/documents/matches/$(id)).data.status != 'draft') &&
         (request.method == 'get' || (request.query.limit != null && request.query.limit <= 21));
       allow create: if admin() && revision == string(getAfter(/databases/$(database)/documents/matches/$(id)).data.revision) &&
         getAfter(/databases/$(database)/documents/matches/$(id)).data.revision == (exists(/databases/$(database)/documents/matches/$(id)) ? get(/databases/$(database)/documents/matches/$(id)).data.get('revision',0) : 0) + 1 &&
@@ -156,9 +275,9 @@ service cloud.firestore {
       return a.action == action && a.path == path && a.actor == request.auth.uid && a.at == request.time;
     }
     match /rooms/{id} {
-      allow get: if admin() || (request.auth != null && resource.data.enabled == true &&
+      allow get: if admin() || (activeAccount() && matchAllowed(request.auth.uid,id) && resource.data.enabled == true &&
         request.time >= resource.data.releaseAt &&
-        get(/databases/$(database)/documents/matches/$(id)).data.status in ['closed','live'] &&
+        get(/databases/$(database)/documents/matches/$(id)).data.status in ['open','closed','live'] &&
         get(/databases/$(database)/documents/entries/$(request.auth.uid + '_' + id)).data.status == 'confirmed');
       allow list: if admin() && bounded();
       allow create, update: if admin() &&
@@ -175,7 +294,7 @@ service cloud.firestore {
     function resultAward(matchId, m, placement, kills, award) {
       let row = /databases/$(database)/documents/matches/$(matchId)/prizes/$(string(placement));
       let prize = exists(row) ? get(row).data.amountPaisa : 0;
-      return award is int && award >= 0 && award <= 9007199254740991 && (!m.get('prizesEnabled',false) || placement <= m.get('joined',0)) &&
+      return award is int && award >= 0 && award <= 9007199254740991 && (!m.get('prizesEnabled',false) || placement <= m.capacity) &&
         (m.get('prizesEnabled',false) ? award == prize + m.perKillPaisa * kills : award <= m.prizePaisa + m.perKillPaisa * kills);
     }
     function validResultDraft(id) {
@@ -190,7 +309,7 @@ service cloud.firestore {
         d.placement is int && d.placement >= 1 && d.placement <= m.capacity &&
         d.kills is int && d.kills >= 0 && d.kills <= 10000 &&
         d.awardPaisa is int && d.awardPaisa >= 0 && d.awardPaisa <= 9007199254740991 &&
-        resultAward(d.match,m,d.placement,d.kills,d.awardPaisa) && m.status == 'review' &&
+        resultAward(d.match,m,d.placement,d.kills,d.awardPaisa) &&
         d.revision is int && d.revision == (resource == null ? 1 : resource.data.revision + 1) &&
         (resource == null || (d.publicId == resource.data.publicId && d.uid == resource.data.uid && d.match == resource.data.match)) &&
         !exists(/databases/$(database)/documents/results/$(d.publicId)) &&
@@ -209,7 +328,7 @@ service cloud.firestore {
       return d.keys().hasAll(['match','title','titleSearch','mode','map','startsAt','username','avatar','placement','kills','awardPaisa','creditedPaisa','settlementStatus','publishedAt']) &&
         d.keys().hasOnly(['match','title','titleSearch','mode','map','startsAt','username','avatar','placement','kills','awardPaisa','creditedPaisa','settlementStatus','publishedAt']) &&
         draft.publicId == id && link.result == id && link.match == draft.match && link.uid == draft.uid &&
-        m.status == 'review' && d.match == draft.match && d.title == m.title && d.titleSearch == m.title.lower() && d.mode == m.mode && d.map == m.map && d.startsAt == m.startsAt &&
+        d.match == draft.match && d.title == m.title && d.titleSearch == m.title.lower() && d.mode == m.mode && d.map == m.map && d.startsAt == m.startsAt &&
         d.username == draft.username && d.avatar == draft.avatar && d.placement == draft.placement && d.kills == draft.kills && d.awardPaisa == draft.awardPaisa &&
         resultAward(d.match,m,d.placement,d.kills,d.awardPaisa) &&
         !exists(/databases/$(database)/documents/publishedPlacements/$(d.match + '_' + string(d.placement))) &&
@@ -225,7 +344,7 @@ service cloud.firestore {
       // Outcome corrections cannot overwrite published history.
     }
     match /resultLinks/{id} {
-      allow read: if (admin() || (request.auth != null && resource.data.uid == request.auth.uid)) && (request.method == 'get' || bounded());
+      allow read: if (admin() || (activeAccount() && resource.data.uid == request.auth.uid)) && (request.method == 'get' || bounded());
       allow create: if admin() && request.resource.data.keys().hasAll(['uid','match','entry','result','titleSearch','publishedAt']) &&
         request.resource.data.keys().hasOnly(['uid','match','entry','result','titleSearch','publishedAt']) &&
         request.resource.data.result == id && request.resource.data.entry == request.resource.data.uid + '_' + request.resource.data.match &&
@@ -275,7 +394,7 @@ service cloud.firestore {
       let old = resource == null ? {} : resource.data;
       let c = getAfter(/databases/$(database)/documents/prizeCredits/$(d.lastEntry)).data;
       let m = get(/databases/$(database)/documents/matches/$(matchId)).data;
-      return freshPrize(d.lastEntry) && c.match == matchId && m.status == 'review' &&
+      return freshPrize(d.lastEntry) && c.match == matchId &&
         d.keys().hasAll(['processed','placementPaisa','creditedPaisa','lastEntry','updatedAt']) &&
         d.keys().hasOnly(['processed','placementPaisa','creditedPaisa','lastEntry','updatedAt']) &&
         d.processed is int && d.processed == old.get('processed',0) + 1 && d.processed <= m.get('joined',0) &&
@@ -294,8 +413,8 @@ service cloud.firestore {
         d.keys().hasOnly(['uid','match','result','placement','kills','amountPaisa','placementPaisa','balanceAfter','at']) &&
         entry == d.uid + '_' + d.match && link.entry == entry && link.uid == d.uid && link.match == d.match && link.result == d.result &&
         r.match == d.match && r.placement == d.placement && r.kills == d.kills &&
-        d.placement is int && d.placement >= 1 && d.placement <= m.get('joined',0) && d.kills is int && d.kills >= 0 && d.kills <= 10000 &&
-        d.amountPaisa == r.awardPaisa && resultAward(d.match,m,d.placement,d.kills,d.amountPaisa) && m.status == 'review' &&
+        d.placement is int && d.placement >= 1 && d.placement <= m.capacity && d.kills is int && d.kills >= 0 && d.kills <= 10000 &&
+        d.amountPaisa == r.awardPaisa && resultAward(d.match,m,d.placement,d.kills,d.amountPaisa) &&
         d.placementPaisa is int && d.placementPaisa >= 0 &&
         d.placementPaisa == (d.amountPaisa > m.perKillPaisa * d.kills ? d.amountPaisa - m.perKillPaisa * d.kills : 0) &&
         r.creditedPaisa == d.amountPaisa && r.settlementStatus == (d.amountPaisa > 0 ? 'credited' : 'not_applicable') &&
@@ -314,8 +433,8 @@ service cloud.firestore {
         d.diff(resource.data).affectedKeys().hasOnly(['creditedPaisa','settlementStatus']) && d.creditedPaisa == c.amountPaisa && d.settlementStatus == (c.amountPaisa > 0 ? 'credited' : 'not_applicable');
     }
     match /prizeCredits/{entry} {
-      allow get: if admin() || (request.auth != null && resource != null && resource.data.uid == request.auth.uid);
-      allow list: if request.auth != null && (admin() || resource.data.uid == request.auth.uid) && bounded();
+      allow get: if admin() || (activeAccount() && resource != null && resource.data.uid == request.auth.uid);
+      allow list: if activeAccount() && (admin() || resource.data.uid == request.auth.uid) && bounded();
       allow create: if admin() && prizeCreditAllowed(entry);
     }
     match /matchPlacements/{id} {
@@ -336,7 +455,7 @@ service cloud.firestore {
       allow create, update: if admin() && (prizeProgressAllowed(id) || emptySettlement(id));
     }
     match /withdrawalPolicy/{id} {
-      allow get: if request.auth != null && id == 'bkash';
+      allow get: if activeAccount() && id == 'bkash';
       allow list: if admin() && bounded();
       allow create, update: if admin() && id == 'bkash' &&
         request.resource.data.keys().hasAll(['minimumPaisa','feePaisa','enabled','currency','revision','updatedAt']) && request.resource.data.keys().hasOnly(['minimumPaisa','feePaisa','enabled','currency','revision','updatedAt']) &&
@@ -400,9 +519,9 @@ service cloud.firestore {
         d.balanceAfter == getAfter(/databases/$(database)/documents/wallets/$(r.uid)).data.winnings && d.at == request.time;
     }
     match /withdrawals/{id} {
-      allow get: if request.auth != null && (resource == null || resource.data.uid == request.auth.uid || admin());
-      allow list: if request.auth != null && (resource.data.uid == request.auth.uid || admin()) && bounded();
-      allow create: if request.auth != null && withdrawalCreate(id);
+      allow get: if activeAccount() && (resource == null || resource.data.uid == request.auth.uid || admin());
+      allow list: if activeAccount() && (resource.data.uid == request.auth.uid || admin()) && bounded();
+      allow create: if activeAccount() && withdrawalCreate(id);
       allow update: if admin() && withdrawalDecision(id);
     }
     match /payoutReferences/{id} {
@@ -412,8 +531,16 @@ service cloud.firestore {
         id == 'bkash_' + getAfter(/databases/$(database)/documents/withdrawals/$(request.resource.data.withdrawal)).data.payoutReference &&
         request.resource.data.amountPaisa == getAfter(/databases/$(database)/documents/withdrawals/$(request.resource.data.withdrawal)).data.amountPaisa && request.resource.data.destination == getAfter(/databases/$(database)/documents/withdrawals/$(request.resource.data.withdrawal)).data.destination && request.resource.data.at == request.time;
     }
+    match /supportSettings/{id} {
+      allow get: if id == 'whatsapp';
+      allow create, update: if admin() && id == 'whatsapp' &&
+        request.resource.data.keys().hasAll(['number','revision','updatedAt']) && request.resource.data.keys().hasOnly(['number','revision','updatedAt']) &&
+        request.resource.data.number is string && request.resource.data.number.matches('01[3-9][0-9]{8}') &&
+        request.resource.data.revision is int && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1) && request.resource.data.updatedAt == request.time &&
+        audited('support_whatsapp_' + string(request.resource.data.revision),'saveSupportSettings','supportSettings/whatsapp');
+    }
     match /paymentInstructions/{id} {
-      allow get: if request.auth != null && id == 'bkash';
+      allow get: if activeAccount() && id == 'bkash';
       allow create, update: if admin() && id == 'bkash' &&
         request.resource.data.keys().hasAll(['number','revision','updatedAt']) && request.resource.data.keys().hasOnly(['number','enabled','revision','updatedAt']) &&
         request.resource.data.enabled is bool && request.resource.data.number is string && (request.resource.data.number.matches('01[3-9][0-9]{8}') || (request.resource.data.enabled == false && request.resource.data.number == '')) &&
@@ -421,7 +548,7 @@ service cloud.firestore {
         audited('payment_bkash_' + string(request.resource.data.revision),'savePaymentInstructions','paymentInstructions/bkash');
     }
     match /playerPages/{id} {
-      allow get: if request.auth != null && id in ['rules','help','about','privacy'] &&
+      allow get: if activeAccount() && id in ['rules','help','about','privacy'] &&
         (admin() || resource == null || resource.data.enabled == true);
       allow list: if admin() && bounded();
       allow create, update: if admin() && id in ['rules','help','about','privacy'] &&
@@ -442,6 +569,8 @@ service cloud.firestore {
         request.resource.data.data is bytes && request.resource.data.data.size() > 0 && request.resource.data.data.size() <= 80000 && request.resource.data.contentType == 'image/webp' && request.resource.data.createdAt == request.time && request.resource.data.createdBy == request.auth.uid;
     }
     match /categories/{id} {
+      allow delete: if owner() && resource.data.active == false &&
+        audited('deleteCategory_' + id,'deleteCategory','categories/' + id);
       allow read: if (admin() || resource.data.active == true) && (request.method == 'get' || bounded());
       allow create, update: if admin() && request.resource.data.keys().hasAll(['name','order','active','updatedAt','updatedBy']) &&
         request.resource.data.keys().hasOnly(['name','order','active','updatedAt','updatedBy','artworkId']) &&
@@ -477,39 +606,54 @@ service cloud.firestore {
       return parts.size() == 2 && parts[0] == 'entries' && id == request.resource.data.action + '_' + parts[1] && e.reviewedAt == request.time && e.reviewedBy == request.auth.uid &&
         e.status == (request.resource.data.action == 'confirmEntry' ? 'confirmed' : (request.resource.data.action == 'refundEntry' ? 'refunded' : 'rejected'));
     }
+    function deletionAudit(id) {
+      let d = request.resource.data;
+      let parts = d.path.split('/');
+      return owner() && parts.size() == 2 && id == d.action + '_' + parts[1] &&
+        ((d.action == 'deleteCategory' && parts[0] == 'categories' &&
+          exists(/databases/$(database)/documents/categories/$(parts[1])) &&
+          get(/databases/$(database)/documents/categories/$(parts[1])).data.active == false &&
+          !existsAfter(/databases/$(database)/documents/categories/$(parts[1]))) ||
+         (d.action == 'deleteMatch' && parts[0] == 'matches' &&
+          exists(/databases/$(database)/documents/matches/$(parts[1])) &&
+          !existsAfter(/databases/$(database)/documents/matches/$(parts[1]))));
+    }
     match /auditRecords/{id} {
       allow read: if admin() && (request.method == 'get' || bounded());
-      allow create: if admin() && request.resource.data.keys().hasOnly(['action','path','actor','at','deposit']) &&
+      allow create: if admin() && request.resource.data.keys().hasOnly(['action','path','actor','at','deposit','reason']) &&
+        (request.resource.data.action == 'moderatePlayer' ? (request.resource.data.reason is string && request.resource.data.reason.size() > 0 && request.resource.data.reason.size() <= 1000) : !('reason' in request.resource.data)) &&
         (request.resource.data.action in ['approveDeposit','rejectDeposit'] ? financialAudit(id) : !('deposit' in request.resource.data)) &&
-        request.resource.data.action in ['confirmEntry','refundEntry','rejectEntry','create','update','saveRoom','saveResultDraft','publishResult','publishParticipant','savePage','replySupport','saveMatch','savePaymentInstructions','approveDeposit','rejectDeposit','creditPrize','saveWithdrawalPolicy','approveWithdrawal','rejectWithdrawal','sendWithdrawal'] && request.resource.data.path is string &&
+        request.resource.data.action in ['saveMatchSchedule','moderatePlayer','deleteCategory','deleteMatch','confirmEntry','refundEntry','rejectEntry','create','update','saveRoom','saveResultDraft','publishResult','publishParticipant','savePage','replySupport','saveMatch','savePaymentInstructions','saveSupportSettings','approveDeposit','rejectDeposit','creditPrize','saveWithdrawalPolicy','approveWithdrawal','rejectWithdrawal','sendWithdrawal'] && request.resource.data.path is string &&
         request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time && (request.resource.data.action != 'creditPrize' || prizeAudit(id)) &&
         (!(request.resource.data.action in ['approveWithdrawal','rejectWithdrawal','sendWithdrawal']) || withdrawalAudit(id)) &&
         (request.resource.data.action != 'saveWithdrawalPolicy' || withdrawalPolicyAudit(id)) &&
+        (!(request.resource.data.action in ['deleteCategory','deleteMatch']) || deletionAudit(id)) &&
         (!(request.resource.data.action in ['confirmEntry','refundEntry','rejectEntry']) || entryAudit(id));
     }
     match /users/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || admin());
-      allow create, update: if request.auth != null && request.auth.uid == uid &&
-        request.resource.data.keys().hasOnly(['displayName','ffUsername','ffUid','avatar']) &&
+      allow read: if activeAccount() && (request.auth.uid == uid || admin());
+      allow create, update: if activeAccount() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['displayName','ffUsername','ffUid','avatar','email']) &&
+        (!('email' in request.resource.data) || request.resource.data.email == request.auth.token.email) &&
         request.resource.data.get('displayName','') is string && request.resource.data.get('displayName','').size() <= 80 &&
         request.resource.data.ffUsername is string && request.resource.data.ffUsername.size() <= 80 &&
         request.resource.data.ffUid is string && request.resource.data.ffUid.size() <= 40 &&
         request.resource.data.get('avatar','solo') in ['solo','duo','squad'];
     }
     match /wallets/{uid} {
-      allow get: if request.auth != null && (request.auth.uid == uid || admin());
+      allow get: if activeAccount() && (request.auth.uid == uid || admin());
       allow create, update: if admin() && request.resource.data.balance is int &&
         (resource == null ? request.resource.data.keys().hasOnly(['balance','lastDeposit']) : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance','lastDeposit'])) &&
         getAfter(/databases/$(database)/documents/walletDeposits/$(request.resource.data.lastDeposit)).data.uid == uid && liveCredit(request.resource.data.lastDeposit);
-      allow create, update: if admin() && prizeWalletAllowed(uid);
-      allow update: if request.auth != null && withdrawalWallet(uid);
-      allow update: if admin() && request.resource.data.keys().hasAny(['lastEntry','lastRefund']) && paidWallet(uid);
+      allow create, update: if (resource == null || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['winnings','lastPrize'])) && admin() && prizeWalletAllowed(uid);
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['winnings','reservedWinnings','lastWithdrawal']) && activeAccount() && withdrawalWallet(uid);
+      allow update: if activeAccount() && request.resource.data.keys().hasAny(['lastEntry','lastRefund']) && paidWallet(uid);
     }
     match /entries/{id} {
-      allow get: if request.auth != null && (resource == null || resource.data.uid == request.auth.uid || admin());
-      allow list: if request.auth != null && (resource.data.uid == request.auth.uid || admin());
-      allow create: if request.auth != null && validFreeEntry(id);
-      allow create: if request.auth != null && request.resource.data.keys().hasAll(['uid','match','username','roster','status','fee','createdAt']) && paidRequest(id);
+      allow get: if activeAccount() && (resource == null || resource.data.uid == request.auth.uid || admin());
+      allow list: if activeAccount() && (resource.data.uid == request.auth.uid || admin());
+      allow create: if activeAccount() && matchAllowed(request.auth.uid,request.resource.data.match) && validFreeEntry(id);
+      allow create: if activeAccount() && request.resource.data.keys().hasAll(['uid','match','username','roster','status','fee','createdAt']) && matchAllowed(request.auth.uid,request.resource.data.match) && paidRequest(id);
       allow update: if admin() && resource.data.get('fee',0) > 0 && request.resource.data.keys().hasAll(['status','reviewedBy','reviewedAt']) && paidDecision(id);
       allow update: if admin() && resource.data.status == 'confirmed' && !('publicId' in resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['publicId','avatar']) &&
@@ -534,14 +678,14 @@ service cloud.firestore {
     }
     match /participantLinks/{publicId} {
       allow get: if admin();
-      allow create: if request.auth != null && request.resource.data.keys().hasOnly(['entry']) &&
+      allow create: if activeAccount() && request.resource.data.keys().hasOnly(['entry']) &&
         request.resource.data.entry is string &&
         publishParticipant(publicId,getAfter(/databases/$(database)/documents/entries/$(request.resource.data.entry)).data.match);
     }
     match /matches/{matchId}/participants/{publicId} {
       allow read: if (admin() || get(/databases/$(database)/documents/matches/$(matchId)).data.status != 'draft') &&
         (request.method == 'get' || (request.query.limit != null && request.query.limit <= 21));
-      allow create: if request.auth != null && publishParticipant(publicId,matchId);
+      allow create: if activeAccount() && publishParticipant(publicId,matchId);
     }
     function gameName(name) {
       return name is string && name.size() > 0 && name.size() <= 80 && name.matches('\\S(.*\\S)?');
@@ -549,17 +693,22 @@ service cloud.firestore {
     function paidRequest(id) {
       let d = request.resource.data;
       let m = get(/databases/$(database)/documents/matches/$(d.match)).data;
-      return d.keys().hasAll(['uid','match','username','roster','status','fee','createdAt']) && d.keys().hasOnly(['uid','match','username','roster','status','fee','createdAt']) &&
-        d.uid == request.auth.uid && d.match is string && id == d.uid + '_' + d.match && d.status == 'requested' && d.createdAt == request.time &&
+      let seat = getAfter(/databases/$(database)/documents/matches/$(d.match)).data;
+      let before = get(/databases/$(database)/documents/wallets/$(d.uid)).data;
+      let wallet = getAfter(/databases/$(database)/documents/wallets/$(d.uid)).data;
+      let ledger = getAfter(/databases/$(database)/documents/walletLedger/$('entry_' + id)).data;
+      return d.keys().hasOnly(['uid','match','username','roster','status','fee','createdAt','publicId','avatar']) &&
+        d.uid == request.auth.uid && id == d.uid + '_' + d.match && d.status == 'confirmed' && d.createdAt == request.time &&
         d.fee is int && d.fee > 0 && d.fee <= 9007199254740991 && d.fee == m.entryPaisa &&
         m.status == 'open' && m.get('joined',0) < m.capacity && d.username == get(/databases/$(database)/documents/users/$(d.uid)).data.ffUsername &&
-        validRoster(d,m.mode) && get(/databases/$(database)/documents/wallets/$(d.uid)).data.balance >= d.fee;
+        d.avatar == get(/databases/$(database)/documents/users/$(d.uid)).data.get('avatar','solo') && validRoster(d,m.mode) &&
+        participantMatches(d.match,d.publicId,d) && before.balance - wallet.balance + before.get('winnings',0) - wallet.get('winnings',0) == d.fee && wallet.lastEntry == id &&
+        seat.joined == m.get('joined',0) + 1 && seat.lastEntry == id && ledger.entry == id && ledger.at == request.time;
     }
     function freshEntry(id) {
-      let old = get(/databases/$(database)/documents/entries/$(id)).data;
       let e = getAfter(/databases/$(database)/documents/entries/$(id)).data;
-      return e.reviewedAt == request.time && e.reviewedBy == request.auth.uid &&
-        ((old.status == 'requested' && e.status == 'confirmed') || (old.status == 'confirmed' && e.status == 'refunded'));
+      return (!exists(/databases/$(database)/documents/entries/$(id)) && e.uid == request.auth.uid && e.status == 'confirmed' && e.createdAt == request.time) || (admin() && e.reviewedAt == request.time && e.reviewedBy == request.auth.uid &&
+        ((get(/databases/$(database)/documents/entries/$(id)).data.status == 'requested' && e.status == 'confirmed') || (get(/databases/$(database)/documents/entries/$(id)).data.status == 'confirmed' && e.status == 'refunded')));
     }
     function paidSeatClaim(id) {
       let d = request.resource.data;
@@ -570,14 +719,26 @@ service cloud.firestore {
         d.diff(old).affectedKeys().hasOnly(['joined','lastEntry']) && d.joined is int && d.joined == old.get('joined',0) + 1 &&
         d.lastEntry == ledger.entry && e.match == id && e.fee == old.entryPaisa && freshEntry(ledger.entry) && e.status == 'confirmed';
     }
+    // Entry uses deposits first. Refunds restore the immutable original funding split.
+    function paidBalanceChange(before, after, fee, id, refund) {
+      let original = refund && exists(/databases/$(database)/documents/walletLedger/$('entry_' + id)) ? get(/databases/$(database)/documents/walletLedger/$('entry_' + id)).data : {};
+      let deposit = refund ? original.get('depositPortion',fee) : (before.balance < fee ? before.balance : fee);
+      let winnings = fee - deposit;
+      return before.balance is int && before.balance >= 0 && before.get('winnings',0) is int && before.get('winnings',0) >= 0 &&
+        deposit is int && deposit >= 0 && winnings >= 0 &&
+        after.balance is int && after.balance >= 0 && after.balance <= 9007199254740991 &&
+        after.get('winnings',0) is int && after.get('winnings',0) >= 0 && after.get('winnings',0) + before.get('reservedWinnings',0) <= 9007199254740991 &&
+        after.balance == before.balance + (refund ? deposit : -deposit) &&
+        after.get('winnings',0) == before.get('winnings',0) + (refund ? winnings : -winnings);
+    }
     function paidWallet(uid) {
       let d = request.resource.data;
       let refund = d.diff(resource.data).affectedKeys().hasAny(['lastRefund']);
       let id = refund ? d.lastRefund : d.lastEntry;
       let e = getAfter(/databases/$(database)/documents/entries/$(id)).data;
-      return d.diff(resource.data).affectedKeys().hasOnly(refund ? ['balance','lastRefund'] : ['balance','lastEntry']) &&
-        d.balance is int && d.balance >= 0 && d.balance <= 9007199254740991 && e.uid == uid && freshEntry(id) && e.status == (refund ? 'refunded' : 'confirmed') &&
-        d.balance == resource.data.balance + (refund ? e.fee : -e.fee);
+      return d.diff(resource.data).affectedKeys().hasOnly(refund ? ['balance','winnings','lastRefund'] : ['balance','winnings','lastEntry']) &&
+        e.uid == uid && freshEntry(id) && e.status == (refund ? 'refunded' : 'confirmed') &&
+        paidBalanceChange(resource.data,d,e.fee,id,refund);
     }
     function paidDecision(id) {
       let old = resource.data;
@@ -592,20 +753,29 @@ service cloud.firestore {
         ((old.status == 'requested' && d.status == 'rejected' && d.decisionReason is string && d.decisionReason.size() > 0 && d.decisionReason.size() <= 1000 && d.decisionReason.matches('(?s).*\\S.*') &&
           !d.diff(old).affectedKeys().hasAny(['publicId','avatar']) && audited('rejectEntry_' + id,'rejectEntry','entries/' + id)) ||
          ((refund ? (old.status == 'confirmed' && m.status == 'cancelled' && !d.diff(old).affectedKeys().hasAny(['publicId','avatar'])) :
-          (old.status == 'requested' && d.status == 'confirmed' && m.status == 'open' && old.fee == m.entryPaisa && validRoster(old,m.mode) &&
+          (old.status == 'requested' && d.status == 'confirmed' && matchAllowed(old.uid,old.match) && m.status == 'open' && old.fee == m.entryPaisa && validRoster(old,m.mode) &&
            d.avatar == get(/databases/$(database)/documents/users/$(old.uid)).data.get('avatar','solo') && participantMatches(old.match,d.publicId,d) &&
            getAfter(/databases/$(database)/documents/matches/$(old.match)).data.joined == m.get('joined',0) + 1)) &&
-          wallet.get(refund ? 'lastRefund' : 'lastEntry','') == id && wallet.balance == before.balance + (refund ? old.fee : -old.fee) &&
+          wallet.get(refund ? 'lastRefund' : 'lastEntry','') == id && wallet.balance - before.balance + wallet.get('winnings',0) - before.get('winnings',0) == (refund ? old.fee : -old.fee) &&
           ledger.entry == id && ledger.at == request.time && audited((refund ? 'refundEntry_' : 'confirmEntry_') + id,refund ? 'refundEntry' : 'confirmEntry','entries/' + id)));
     }
     function paidLedger(id) {
       let d = request.resource.data;
       let e = getAfter(/databases/$(database)/documents/entries/$(d.entry)).data;
       let refund = e.status == 'refunded';
-      return d.keys().hasAll(['uid','delta','type','status','currency','entry','match','reference','balanceAfter','at']) && d.keys().hasOnly(['uid','delta','type','status','currency','entry','match','reference','balanceAfter','at']) &&
+      let before = get(/databases/$(database)/documents/wallets/$(e.uid)).data;
+      let after = getAfter(/databases/$(database)/documents/wallets/$(e.uid)).data;
+      return d.keys().hasAll(['uid','delta','type','status','currency','entry','match','reference','balanceAfter','at']) &&
+        d.keys().hasOnly(['uid','delta','type','status','currency','entry','match','reference','balanceAfter','depositPortion','winningsPortion','winningsAfter','at']) &&
         freshEntry(d.entry) && id == (refund ? 'refund_' : 'entry_') + d.entry && d.uid == e.uid && d.delta == (refund ? e.fee : -e.fee) &&
         d.type == (refund ? 'refund' : 'entry_fee') && d.status == 'completed' && d.currency == 'BDT' && d.match == e.match && d.reference == e.match &&
-        d.balanceAfter == getAfter(/databases/$(database)/documents/wallets/$(e.uid)).data.balance && d.at == request.time;
+        d.balanceAfter == after.balance && d.at == request.time &&
+        ((!d.keys().hasAny(['depositPortion','winningsPortion','winningsAfter']) && before.get('winnings',0) == after.get('winnings',0)) ||
+         (d.keys().hasAll(['depositPortion','winningsPortion','winningsAfter']) && d.depositPortion is int && d.winningsPortion is int &&
+          d.depositPortion >= 0 && d.winningsPortion >= 0 && d.depositPortion + d.winningsPortion == e.fee &&
+          d.depositPortion == (refund ? after.balance - before.balance : before.balance - after.balance) &&
+          d.winningsPortion == (refund ? after.get('winnings',0) - before.get('winnings',0) : before.get('winnings',0) - after.get('winnings',0)) &&
+          d.winningsAfter == after.get('winnings',0)));
     }
     function validRoster(d, mode) {
       let r = d.get('roster', [d.username]);
@@ -634,9 +804,9 @@ service cloud.firestore {
         (!('publicId' in d) || (d.avatar == get(p).data.get('avatar','solo') && participantMatches(d.match, d.publicId, d)));
     }
     match /disputes/{id} {
-      allow get: if request.auth != null && (resource == null || resource.data.uid == request.auth.uid || admin());
-      allow list: if request.auth != null && (resource.data.uid == request.auth.uid || admin()) && request.query.limit != null && request.query.limit <= 21;
-      allow create: if request.auth != null && request.resource.data.keys().hasAll(['uid','subject','body','reference','createdAt','updatedAt','status','revision','response']) &&
+      allow get: if activeAccount() && (resource == null || resource.data.uid == request.auth.uid || admin());
+      allow list: if activeAccount() && (resource.data.uid == request.auth.uid || admin()) && request.query.limit != null && request.query.limit <= 21;
+      allow create: if activeAccount() && request.resource.data.keys().hasAll(['uid','subject','body','reference','createdAt','updatedAt','status','revision','response']) &&
         request.resource.data.keys().hasOnly(['uid','subject','body','reference','createdAt','updatedAt','status','revision','response']) &&
         request.resource.data.uid == request.auth.uid && gameName(request.resource.data.subject) &&
         request.resource.data.body is string && request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 4000 && request.resource.data.body.matches('(?s).*\\S.*') &&
@@ -647,7 +817,7 @@ service cloud.firestore {
         request.resource.data.revision is int && request.resource.data.revision == resource.data.revision + 1 && request.resource.data.updatedAt == request.time &&
         validSupportReply(id,string(request.resource.data.revision),request.resource.data);
       match /responses/{revision} {
-        allow read: if request.auth != null && (admin() || get(/databases/$(database)/documents/disputes/$(id)).data.uid == request.auth.uid) &&
+        allow read: if activeAccount() && (admin() || get(/databases/$(database)/documents/disputes/$(id)).data.uid == request.auth.uid) &&
           (request.method == 'get' || (request.query.limit != null && request.query.limit <= 21));
         allow create: if admin() && validSupportReply(id,revision,getAfter(/databases/$(database)/documents/disputes/$(id)).data) &&
           getAfter(/databases/$(database)/documents/disputes/$(id)).data.revision == get(/databases/$(database)/documents/disputes/$(id)).data.revision + 1;
@@ -690,9 +860,9 @@ service cloud.firestore {
         d.status == (a.action == 'approveDeposit' ? 'approved' : 'rejected') && d.reviewedBy == request.auth.uid && d.reviewedAt == request.time;
     }
     match /walletDeposits/{id} {
-      allow get: if request.auth != null && (resource == null || resource.data.uid == request.auth.uid || admin());
-      allow list: if request.auth != null && (resource.data.uid == request.auth.uid || admin()) && (bounded() || admin());
-      allow create: if request.auth != null && request.resource.data.keys().hasAll(['uid','requestId','amount','reference','sender','receiver','provider','currency','status','createdAt']) &&
+      allow get: if activeAccount() && (resource == null || resource.data.uid == request.auth.uid || admin());
+      allow list: if activeAccount() && (resource.data.uid == request.auth.uid || admin()) && (bounded() || admin());
+      allow create: if activeAccount() && request.resource.data.keys().hasAll(['uid','requestId','amount','reference','sender','receiver','provider','currency','status','createdAt']) &&
         request.resource.data.keys().hasOnly(['uid','requestId','amount','reference','sender','receiver','provider','currency','status','createdAt']) &&
         request.resource.data.uid == request.auth.uid && request.resource.data.requestId is string && request.resource.data.requestId.matches('[A-Z0-9-]{6,80}') &&
         id == request.auth.uid + '_' + request.resource.data.requestId &&
@@ -712,14 +882,14 @@ service cloud.firestore {
       allow create: if admin() && id == request.resource.data.receiver + '_' + request.resource.data.reference && liveCredit(request.resource.data.deposit);
     }
     match /walletLedger/{id} {
-      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || admin()) && (request.method == 'get' || bounded());
-      allow create: if admin() && id == 'live_deposit_' + request.resource.data.deposit && liveCredit(request.resource.data.deposit);
-      allow create: if admin() && prizeLedgerAllowed(id);
-      allow create: if admin() && withdrawalLedger(id);
-      allow create: if admin() && request.resource.data.keys().hasAll(['entry']) && paidLedger(id);
+      allow read: if activeAccount() && (resource.data.uid == request.auth.uid || admin()) && (request.method == 'get' || bounded());
+      allow create: if request.resource.data.get('type','') == 'deposit' && admin() && id == 'live_deposit_' + request.resource.data.deposit && liveCredit(request.resource.data.deposit);
+      allow create: if request.resource.data.get('type','') == 'prize' && admin() && prizeLedgerAllowed(id);
+      allow create: if request.resource.data.get('type','') == 'withdrawal' && admin() && withdrawalLedger(id);
+      allow create: if activeAccount() && request.resource.data.keys().hasAll(['entry']) && paidLedger(id);
     }
-    match /ledger/{id} { allow read: if request.auth != null && resource.data.uid == request.auth.uid; }
-    match /depositRequests/{id} { allow read: if request.auth != null && (resource.data.uid == request.auth.uid || admin()); }
+    match /ledger/{id} { allow read: if activeAccount() && resource.data.uid == request.auth.uid; }
+    match /depositRequests/{id} { allow read: if activeAccount() && (resource.data.uid == request.auth.uid || admin()); }
     match /{name}/{id} {
       allow read: if name in ['depositRequests','users'] && admin();
     }

@@ -10,35 +10,40 @@ val isLive = noticeBackend == "live"
 val operationsUrl = providers.gradleProperty("operationsUrl").getOrElse(if (isLive) "" else "http://10.0.2.2:8787")
 require(!isLive || operationsUrl.isEmpty()) { "Live transaction service is not implemented. Do not point live accounts at a test service." }
 
-var firebaseProjectId = "demo-arena"
-var firebaseAppId = "1:1234567890:android:arena-local"
-var firebaseApiKey = "local-emulator-key"
-var firebaseStorageBucket = ""
-if (isLive) {
-    val googleServicesFile = file("google-services.json")
-    require(googleServicesFile.isFile) { "A live build requires app/google-services.json." }
-    val config = JsonSlurper().parse(googleServicesFile) as Map<*, *>
-    val project = config["project_info"] as? Map<*, *> ?: error("Missing Firebase project information.")
-    val clients = config["client"] as? List<*> ?: error("Missing Firebase Android client.")
+val adminLive = isLive && providers.gradleProperty("adminLive").orNull == "true"
+val adminUseProjectSigning = adminLive && providers.gradleProperty("adminUseProjectSigning").orNull == "true"
+val playerId = "bd.arena.prototype"
+val adminId = "$playerId.admin"
+
+fun firebaseConfig(configFile: File, packageId: String): List<String> {
+    require(configFile.isFile) { "Missing Firebase configuration for $packageId: ${configFile.name}" }
+    val config = JsonSlurper().parse(configFile) as Map<*, *>
+    val project = config["project_info"] as Map<*, *>
+    val clients = config["client"] as List<*>
     val client = clients.filterIsInstance<Map<*, *>>().firstOrNull {
         val info = it["client_info"] as? Map<*, *>
-        val android = info?.get("android_client_info") as? Map<*, *>
-        android?.get("package_name") == "bd.arena.prototype"
-    } ?: error("Firebase Android package must match bd.arena.prototype.")
+        (info?.get("android_client_info") as? Map<*, *>)?.get("package_name") == packageId
+    } ?: error("Firebase Android package must match $packageId.")
     val info = client["client_info"] as Map<*, *>
-    val keys = client["api_key"] as? List<*>
-    firebaseProjectId = project["project_id"] as? String ?: error("Missing Firebase project ID.")
-    firebaseAppId = info["mobilesdk_app_id"] as? String ?: error("Missing Firebase app ID.")
-    firebaseApiKey = keys?.filterIsInstance<Map<*, *>>()?.firstOrNull()?.get("current_key") as? String ?: error("Missing Firebase API key.")
-    firebaseStorageBucket = project["storage_bucket"] as? String ?: ""
-    require(firebaseProjectId.isNotBlank() && !firebaseProjectId.startsWith("demo-") && firebaseAppId.isNotBlank() && firebaseApiKey.isNotBlank()) { "Live Firebase configuration is incomplete." }
+    val keys = client["api_key"] as List<*>
+    val projectId = project["project_id"] as? String ?: ""
+    val appId = info["mobilesdk_app_id"] as? String ?: ""
+    val apiKey = keys.filterIsInstance<Map<*, *>>().firstOrNull()?.get("current_key") as? String ?: ""
+    require(projectId.isNotBlank() && !projectId.startsWith("demo-") && appId.isNotBlank() && apiKey.isNotBlank()) {
+        "Live Firebase configuration is incomplete for $packageId."
+    }
+    return listOf(projectId, appId, apiKey, project["storage_bucket"] as? String ?: "")
 }
+
+val localFirebase = listOf("demo-arena", "1:1234567890:android:arena-local", "local-emulator-key", "")
+val playerFirebase = if (isLive) firebaseConfig(file("google-services.json"), playerId) else localFirebase
+val adminFirebase = if (adminLive) firebaseConfig(file("src/admin/google-services.json"), adminId) else localFirebase
+require(!adminLive || adminFirebase.first() == playerFirebase.first()) { "Player and admin must use the same Firebase project." }
 
 android {
     namespace = "bd.arena.prototype"
     compileSdk = 34
     defaultConfig {
-        applicationId = "bd.arena.prototype"
         if (!isLive) applicationIdSuffix = if (noticeBackend == "emulator") ".local" else ".demo"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
@@ -47,32 +52,88 @@ android {
         versionName = if(isLive)"1.0.0" else "1.0.0-$noticeBackend"
         buildConfigField("String", "NOTICE_BACKEND", "\"$noticeBackend\"")
         buildConfigField("String", "OPERATIONS_URL", "\"$operationsUrl\"")
-        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
-        buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
-        buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
-        buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"$firebaseStorageBucket\"")
         buildConfigField("Boolean", "FIREBASE_USE_EMULATOR", if (isLive) "false" else "true")
         buildConfigField("Boolean", "LOCAL_OPERATIONS", (!isLive).toString())
         manifestPlaceholders["allowEmulatorTraffic"] = (!isLive).toString()
-        manifestPlaceholders["appLabel"] = if (isLive) "Antihack Tour" else "Antihack Tour Local"
     }
     buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.1" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    if(isLive){
-        val signingFile=rootProject.file("../.signing/release.properties")
-        require(signingFile.isFile){"Production signing configuration is missing."}
-        val productionSigning=Properties().apply{signingFile.inputStream().use{load(it)}}
-        signingConfigs.create("production"){
-            storeFile=rootProject.file("../.signing/antihack-release.jks")
-            storePassword=productionSigning.getProperty("storePassword")
-            keyAlias="antihack"
-            keyPassword=productionSigning.getProperty("storePassword")
+    if (isLive && (!adminLive || adminUseProjectSigning)) {
+        val signingFile = rootProject.file("../.signing/release.properties")
+        require(signingFile.isFile) { "Production signing configuration is missing." }
+        val signing = Properties().apply { signingFile.inputStream().use { load(it) } }
+        signingConfigs.create("production") {
+            storeFile = rootProject.file("../.signing/antihack-release.jks")
+            storePassword = signing.getProperty("storePassword")
+            keyAlias = "antihack"
+            keyPassword = signing.getProperty("storePassword")
         }
     }
-    buildTypes { release { isDebuggable=false;isMinifyEnabled = true;if(isLive)signingConfig=signingConfigs.getByName("production");proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") } }
+    if (adminLive && !adminUseProjectSigning) {
+        val signingFile = rootProject.file("../.signing/admin-release.properties")
+        require(signingFile.isFile) { "Admin signing configuration is missing." }
+        val signing = Properties().apply { signingFile.inputStream().use { load(it) } }
+        fun signingValue(name: String): String = requireNotNull(signing.getProperty(name)?.takeIf { it.isNotBlank() }) {
+            "Admin signing configuration is missing $name."
+        }
+        signingConfigs.create("adminProduction") {
+            storeFile = signingFile.parentFile.resolve(signingValue("storeFile"))
+            storePassword = signingValue("storePassword")
+            keyAlias = signingValue("keyAlias")
+            keyPassword = signingValue("keyPassword")
+        }
+    }
+    flavorDimensions += "audience"
+    productFlavors {
+        create("player") {
+            dimension = "audience"
+            applicationId = playerId
+            if (isLive) {
+                versionCode = 19
+                versionName = "1.0.7"
+            }
+            manifestPlaceholders["appLabel"] = if (isLive) "Antihack Tour" else "Antihack Tour Local"
+            manifestPlaceholders["launcherActivity"] = ".MainActivity"
+            if (isLive && !adminLive) signingConfig = signingConfigs.getByName("production")
+        }
+        create("admin") {
+            dimension = "audience"
+            applicationId = adminId
+            if (isLive) {
+                versionCode = 24
+                versionName = "1.0.12"
+            }
+            manifestPlaceholders["appLabel"] = if (isLive) "Antihack Admin" else "Antihack Admin Local"
+            manifestPlaceholders["launcherActivity"] = ".AdminActivity"
+            if (adminLive) signingConfig = signingConfigs.getByName(if (adminUseProjectSigning) "production" else "adminProduction")
+        }
+        forEach { flavor ->
+            val config = if (flavor.name == "admin") adminFirebase else playerFirebase
+            listOf("PROJECT_ID", "APP_ID", "API_KEY", "STORAGE_BUCKET").zip(config).forEach { (name, value) ->
+                flavor.buildConfigField("String", "FIREBASE_$name", "\"$value\"")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isDebuggable = false
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
 }
+
+androidComponents {
+    beforeVariants(selector().withFlavor("audience" to "player")) {
+        it.enable = !adminLive
+    }
+    beforeVariants(selector().withFlavor("audience" to "admin")) {
+        it.enable = noticeBackend == "emulator" || adminLive
+    }
+}
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.04.01"))
     implementation("androidx.activity:activity-compose:1.8.0")

@@ -31,7 +31,7 @@ internal fun RosterForm(match:Tournament,captain:String,busy:Boolean,bangla:Bool
         if(!validRoster(match.mode,names,captain))Text(t("Enter a distinct game name for every player (up to 80 characters).","প্রত্যেক খেলোয়াড়ের আলাদা গেমের নাম দিন (সর্বোচ্চ ৮০ অক্ষর)।"),color=MaterialTheme.colorScheme.error)
         if(error.isNotBlank())Text(LocaleStrings.get(error),color=MaterialTheme.colorScheme.error)
         Text(t("Entry fee: ","এন্ট্রি ফি: ")+money(match.fee))
-        if(match.fee>0)Text(t("Paid entry requests need staff confirmation; a request does not reserve a place.","পেইড এন্ট্রির জন্য অ্যাডমিনের অনুমোদন প্রয়োজন; অনুরোধে আসন নিশ্চিত হয় না।"))
+        if(match.fee>0)Text(t("Confirm to deduct ${money(match.fee)} from your wallet and join immediately. Deposit balance is used first, then available winnings.","নিশ্চিত করলে আপনার ওয়ালেট থেকে ${money(match.fee)} কেটে সঙ্গে সঙ্গে যোগ করা হবে। আগে জমা ব্যালেন্স, পরে ব্যবহারযোগ্য জয়ী অর্থ কাটা হবে।"))
         Button(onClick={submit(names)},enabled=!busy&&validRoster(match.mode,names,captain),modifier=Modifier.fillMaxWidth()) {Text(t(if(busy)"Please wait…" else "Confirm roster and join",if(busy)"অপেক্ষা করুন…" else "দল নিশ্চিত করে যোগ দিন"))}
     }
 }

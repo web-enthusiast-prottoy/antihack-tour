@@ -15,6 +15,7 @@ internal class PlayerData(val session: AdminSession) {
     var profile by mutableStateOf<Map<String,String>?>(null)
     var balance by mutableStateOf(0L)
     var winnings by mutableStateOf(0L)
+    val entryBalance:Long get()=balance+winnings
     var reservedWinnings by mutableStateOf(0L)
     var balanceCached by mutableStateOf(true)
     var matchesLoading by mutableStateOf(true)
@@ -55,7 +56,7 @@ internal class PlayerData(val session: AdminSession) {
     }
     fun close() { matchFeed?.close();matchFeed=null; listeners.forEach { it.remove() }; listeners.clear() }
     fun join(match: Tournament, roster:List<String> = listOf(profile?.get("ffUsername").orEmpty()), done: (String)->Unit) {
-        if (match.fee != 0L) { operation("join",mapOf("match" to match.id,"roster" to org.json.JSONArray(roster)),done); return }
+        if (match.fee != 0L) { operation("join",mapOf("match" to match.id,"fee" to match.fee,"roster" to org.json.JSONArray(roster)),done); return }
         if (busy) return
         val uid=session.uid?:return
         busy=true; error=""
@@ -97,7 +98,7 @@ internal class PlayerData(val session: AdminSession) {
         val uid=session.uid?:return
         if(username.length>80||gameUid.length>40) {error="Check your profile fields.";return}
         busy=true;error=""
-        session.db.document("users/$uid").set(mapOf("ffUsername" to username.trim(),"ffUid" to gameUid.trim())).addOnCompleteListener { busy=false; if(!it.isSuccessful) error="Profile could not be saved. Retry setup; your account already exists." else done() }
+        session.db.document("users/$uid").set(mapOf("ffUsername" to username.trim(),"ffUid" to gameUid.trim(),"email" to session.auth.currentUser?.email.orEmpty())).addOnCompleteListener { busy=false; if(!it.isSuccessful) error="Profile could not be saved. Retry setup; your account already exists." else done() }
     }
     fun operation(action:String, values:Map<String,Any>, done:(String)->Unit) {
         if(busy)return
@@ -107,7 +108,7 @@ internal class PlayerData(val session: AdminSession) {
             return
         }
         if(!BuildConfig.LOCAL_OPERATIONS) {
-            if(action !in listOf("deposit","approveDeposit","rejectDeposit")){error="Paid match confirmation is not available yet.";return}
+            if(action !in listOf("deposit","approveDeposit","autoApproveDeposit","rejectDeposit")){error="Paid match confirmation is not available yet.";return}
             busy=true;error=""
             LiveWallet(session).operate(action,values){message,failure->busy=false;if(failure!=null)error=workflowFailure(failure)else done(message.orEmpty())}
             return

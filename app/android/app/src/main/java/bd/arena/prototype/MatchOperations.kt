@@ -9,6 +9,10 @@ import java.util.Date
 import java.util.Locale
 
 internal fun releaseTimestamp(text:String):Timestamp = Timestamp(Date.from(LocalDateTime.parse(text.trim().replace(' ','T')).atZone(ZoneId.of("Asia/Dhaka")).toInstant()))
+internal fun matchEditorTimestamp(original:Timestamp?,text:String):Timestamp {
+    val requested=releaseTimestamp(text)
+    return if(original!=null&&original.toDate().toInstant().truncatedTo(java.time.temporal.ChronoUnit.MINUTES)==requested.toDate().toInstant())original else requested
+}
 internal fun awardPaisa(text:String):Long = java.math.BigDecimal(text.trim()).movePointRight(2).longValueExact().also { require(it in 0..9007199254740991L) }
 internal fun workflowFailure(error:Exception?):String {
     var cause:Throwable?=error
@@ -35,16 +39,15 @@ internal class MatchOperations(private val session:AdminSession) {
         session.db.runTransaction {tx->
             val old=tx.get(ref);val before=tx.get(position)
             require(old.getLong("revision")==expectedRevision){"This match changed. Reload and select the position again."}
-            require((old.getLong("joined")?:0)==0L&&old.getString("status") in listOf("draft","open")){"Prize terms are locked."}
             require(rank in 1..(old.getLong("capacity")?:0)){"Position must be within the saved match capacity."}
             val enabled=old.getBoolean("prizesEnabled")==true
             require(enabled||!before.exists())
-            val total=updatedPrizeTotal(enabled,old.getLong("prizePaisa")?:0,before.getLong("amountPaisa")?:0,amount)
+            val total=if(old.getBoolean("independentPrizeTotal")==true)old.getLong("prizePaisa")?:0 else updatedPrizeTotal(enabled,old.getLong("prizePaisa")?:0,before.getLong("amountPaisa")?:0,amount)
             val revision=expectedRevision+1
             tx.set(position,mapOf("rank" to rank,"amountPaisa" to amount,"matchRevision" to revision,"updatedAt" to FieldValue.serverTimestamp()))
             tx.update(ref,mapOf("prizesEnabled" to true,"prizeRank" to rank,"prizeMaxRank" to maxOf(old.getLong("prizeMaxRank")?:0,rank),"prizePaisa" to total,"revision" to revision,"updatedAt" to FieldValue.serverTimestamp(),"updatedBy" to actor))
             val status=old.getString("status").orEmpty()
-            tx.set(ref.collection("history").document(revision.toString()),mapOf("from" to status,"to" to status,"reason" to "","at" to FieldValue.serverTimestamp()))
+            tx.set(ref.collection("history").document(revision.toString()),mapOf("from" to status,"to" to status,"reason" to old.getString("cancellationReason").orEmpty(),"at" to FieldValue.serverTimestamp()))
             audit(tx,"match_${match}_$revision","saveMatch",ref.path,actor)
             revision to total
         }.addOnCompleteListener {if(session.uid==actor&&session.allowed){busy=false;if(it.isSuccessful){message="Prize saved.";done(it.result.first,it.result.second)}else error=workflowFailure(it.exception)}}
@@ -104,8 +107,7 @@ internal class MatchOperations(private val session:AdminSession) {
             val publicId=old.getString("publicId")?:freshId
             val published=tx.get(session.db.document("results/$publicId"))
             require(!published.exists()) {"Published results are immutable. Use the correction workflow when available."}
-            require(m.getString("status")=="review") {"Move the match to results review first."}
-            require(placement in 1..(m.getLong("joined")?:0) && kills in 0..10000){"Check placement against confirmed participants and check kills."}
+            require(placement in 1..(m.getLong("capacity")?:0) && kills in 0..10000){"Check placement against confirmed participants and check kills."}
             val position=tx.get(session.db.document("matches/$match/prizes/$placement"))
             val computed=prizeAward(position.getLong("amountPaisa")?:0,m.getLong("perKillPaisa")?:0,kills)
             val amount=if(m.getBoolean("prizesEnabled")==true)computed else requireNotNull(award){"Enter the legacy award amount."}
@@ -135,7 +137,7 @@ internal class MatchOperations(private val session:AdminSession) {
                 val match=d.getString("match")!!
                 val m=tx.get(session.db.document("matches/$match"))
                 val e=tx.get(session.db.document("entries/${draft.id}"))
-                require(e.getString("status")=="confirmed" && m.getString("status")=="review") {"Move the match to results review first."}
+                require(e.getString("status")=="confirmed") {"Only confirmed participants can receive results."}
                 val placement=tx.get(session.db.document("publishedPlacements/${match}_${d.getLong("placement")}"))
                 require(!placement.exists()){"This placement is already assigned. Choose the correct result before publishing."}
                 val award=d.getLong("awardPaisa")?:0

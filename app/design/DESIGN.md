@@ -1,3 +1,9 @@
+# Antihack Admin · Operations Desk
+
+The standalone staff app uses charcoal `#101311` and `#1B211D` surfaces, one sage action color `#C4DF9B`, and a gold-edged shield launcher with a silver A, matching the main Antihack crest. The same vector mark appears on staff sign-in, Overview and the wide-layout sidebar. Phones show five destinations across the bottom. At 840dp of available width the navigation moves to a sidebar. At large system text sizes the compact navigation uses labelled icon semantics.
+
+Overview prioritizes actionable review queues and the next three scheduled matches. Lists show a title or amount, relevant date, and status. Record identifiers and private payment details belong in the opened record. Settings groups payments, announcements, content, staff access, and audit history. Keep role and connection checks, field errors, and confirmation text where staff make a decision.
+
 # Antihack Tour — current design
 
 Owner-approved update, 4 November 2026: Home's browsing content is active categories only (no hero, next match or match feed); announcements remain above the grid. Category taps open filtered Explore, while direct Explore navigation clears browsing filters and shows the match feed without category image tiles. Spacious match cards use each match's saved artwork in a 190dp banner, rounded 20dp corners, 20dp content padding, 24dp between sections and 8dp label/value gaps. Fee/prize occupy two columns and participation/status wrap below. The entire card opens details; no separate details button. Details use matching artwork and grouped information with clear countdown separation. This supersedes conflicting Home/card descriptions below.
@@ -100,3 +106,47 @@ Player room state is explicit (hidden/loading/unavailable/server-confirmed). No 
 ## Add Money simplification — owner clarification
 
 Only three player inputs: amount already sent (৳), transaction ID, sender mobile number. Put concise send-first instructions below them, alongside a readable receiving number and Copy number action. Keep optional helper text hidden until a field is invalid; use relevant number/phone keyboards and one full-width Submit request button. Explain that balance changes after manual review in one short sentence. The test build retains a compact do-not-send-real-money notice. Native Payment settings edits only the receiving number; staff changes are audited. Current default: 01889898989.
+
+## Admin workflow — 5 November 2026
+
+Match editing uses Details, Schedule, Prizes, Rules and Publication sections with a fixed Save action. Administrative refresh controls register with one bottom-end icon action, outside scrollable content and clear of navigation. Participant cards show private account email and Free Fire UID when available; public participant documents remain game-name-only. Refunds keep the awaiting count, refund action and operational feedback.
+
+Results use a placement selector and numeric kills input, with a highlighted calculated award above Save and credit. That action automatically saves, publishes and credits through the existing retry-safe stages; interrupted publication/credit stays visible and can be retried. Match status remains manual, explained within Results. Prize positions are editable across match states, with audited revisions; changing prizes does not rewrite previously credited awards. Account emails sync from authenticated identity on sign-in and remain staff/owner-private.
+
+## WhatsApp support — 5 November 2026
+
+Profile adds a 56dp-minimum Support · WhatsApp row, available to guests and signed-in players, opening a user-initiated HTTPS WhatsApp chat. Admin Settings → Support → WhatsApp support edits the shared number through an online, audited update. Initial number: 01703883397. Both surfaces have English/Bangla labels and error feedback. This is separate from private in-app support requests and the existing Contact page.
+
+## Prize setup during creation — 5 November 2026
+
+The match creation Prizes tab includes Total prize (taka), Per kill (taka), and sequential placement amounts added with Add prize position. Remove last position reverses an addition. All creation fields save together; placement amounts do not recalculate the independent total of new matches. Existing legacy match totals retain their previous calculation behavior. Native decimal inputs, English/Bangla labels and inline placement validation follow the established minimal form style.
+
+## Deposit verification — 5 November 2026
+
+The Add Money form shows circular feedback while submitting, then a centred Verifying deposit state for up to 30 seconds after server submission. Only server-confirmed approval reports success. Timeout explains that the saved request awaits admin approval and is visible in history. Admin Payment settings offers notification permission, a battery-settings link and background verification restart after owner opt-in. Keep English/Bangla support and visible ongoing service status; never imply guaranteed receipt verification while offline.
+
+## Timed room release — 5 November 2026
+
+Admin room release reuses the match schedule's native calendar and clock dialogs, with a Release · Bangladesh time label. Enabled room credentials unlock for confirmed participants after the saved time even while registration remains open. The visible player card checks the server every ten seconds, clears on background, rechecks on resume and stops checking when explicitly hidden. Server rules retain membership, enabled and active-match restrictions.
+
+## App continuity and winner selection — 6 November 2026
+
+Account-ban checks run without replacing the player screen while connecting. A confirmed active ban still shows its reason and blocks signed-in features. Open player sheets, entered payment/profile details, filters, notices and feed scroll positions restore with Android saved state; reconnecting must not close forms. Room credentials retain their existing background-clear and server-recheck policy.
+
+Per-match Results opens with the saved prize positions in numeric order. Tapping a position opens a full-height, scrollable sheet with a Set winner control and a participant dropdown (game username, Free Fire UID and account UUID), kill count and calculated winnings. Save and credit publishes the selected result and automatically credits its placement prize plus per-kill reward. Match status does not gate this action or change as a side effect. Saved positions show their winner and credit status; an interrupted credit has a retry action. Existing published winners remain immutable and retries cannot pay twice. Other participant results remain available below prize positions for per-kill and whole-match settlement workflows. English and Bangla controls share the existing theme.
+
+## Receipt diagnostics — 7 November 2026
+
+Payment settings keeps automatic receipt verification beside its source permissions and one-line status/last-update display. Scan counts, unmatched reasons and notification results are under View verification details; Copy verification report stays directly available. Enable auto-approval, Restart background verification and optional bKash notification-access controls use the existing native buttons and scrollable layout. Finance → Deposits uses Check deposits now for both supported receipt sources. Never report credit before the server confirms it; unknown receipt formats and failed operations show a reason. The diagnostic export omits private SMS/notification bodies, phone numbers and transaction IDs.
+
+## Repeating schedules — 7 November 2026
+
+New-match creation adds a Scheduling tab: an explicit repeating switch, daily From/Until native time pickers, delay in minutes, and inclusive First/Last native date pickers. The selected category remains in Details. The footer changes to Create schedule while repeating is enabled; single-match creation remains available. Generated matches open automatically and copy the saved template, with fresh participants/rooms/results.
+
+Matches → Schedules shows the local online-admin service status, each saved range/delay, waiting/queued/paused/completed/attention state, next known creation and paged generated-match history. Pause/Resume and confirmed Stop affect future creation. A date/time range always names Bangladesh time. Current result completion means every positive prize-position winner has an immutable prize credit; the delay begins at the latest credit. Future starts are not fabricated before winners are complete. English/Bangla copy, native 48dp controls, saved form state and compact 200% Bangla layout are verified. Offline pauses automatically and reconnecting resumes. A visible ongoing notification explains background scheduling; reopening the app recovers Android stops. Database rollout limits are in MATCH-SCHEDULING.md.
+
+## Daily schedules and wallet entry — 8 November 2026
+
+Scheduling uses minutes between fixed match starts. Saving creates today's remaining slots together; a date range creates each later day's batch on that day in Bangladesh time. Helper text explains the inclusive aligned end time and the online admin requirement. Schedule cards show next daily batch, generation state and scheduled run times. All matches created refers to creation, independent of game completion.
+
+Paid-entry review explains deposit-first charging followed by available winnings. Join eligibility uses both balances, excludes withdrawal reserves and waits for the current wallet to load. Wallet explains that only winnings can be withdrawn. Cancellation refunds restore the original funding sources. English/Bangla copy follows the existing native controls and layout.

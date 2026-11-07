@@ -75,7 +75,7 @@ internal class WinningsSettlement(private val session:AdminSession) {
                 val prize=tx.get(session.db.document("matches/$matchId/prizes/$placement"))
                 require(entryId=="${uid}_$matchId"&&entry.getString("uid")==uid&&entry.getString("match")==matchId&&entry.getString("status")=="confirmed"&&result.getString("username")==entry.getString("username")){"Only the linked confirmed participant can receive this result."}
                 require(amount==reviewed.getLong("awardPaisa")&&placement==reviewed.getLong("placement")&&kills==reviewed.getLong("kills")){"The result changed. Reload and review it."}
-                require(match.getString("status")=="review"&&placement in 1..(match.getLong("joined")?:0)){"Check the confirmed participant count and results-review status."}
+                require(placement in 1..(match.getLong("capacity")?:0)){"Check the placement against match capacity."}
                 require(!claim.exists()){ "This placement is already assigned. Choose the correct result before publishing." }
                 val killReward=prizeAward(0,match.getLong("perKillPaisa")?:0,kills)
                 val placementAmount=maxOf(0,amount-killReward)

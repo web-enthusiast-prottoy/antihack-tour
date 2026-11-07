@@ -111,26 +111,3 @@ private fun ParticipantRow(index:Int,row:DocumentSnapshot) {
         }
     }
 }
-
-@Composable
-internal fun ParticipantAdmin(session:AdminSession,match:String) {
-    val feed=remember(session.uid,match){ParticipantFeed(session,match,true)}
-    val operations=remember(session.uid,match){MatchOperations(session)}
-    DisposableEffect(feed){feed.load();onDispose{feed.close()}}
-    val state=feed.state
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text(LocaleStrings.get("Publish game names and preset avatar only. New confirmations appear automatically; publish older confirmed entries here."))
-        state.rows.forEach {entry ->
-            Text(entry.getString("username").orEmpty(),style=MaterialTheme.typography.titleMedium)
-            Text(((entry.get("roster") as? List<*>)?:listOf(entry.getString("username"))).joinToString(" · "))
-            OutlinedButton(onClick={operations.publishParticipant(entry){feed.load()}},enabled=!operations.busy&&entry.getString("publicId")==null){Text(LocaleStrings.get(if(entry.getString("publicId")==null)"Publish participant" else "Published"))}
-        }
-        if(state.loading)LinearProgressIndicator(Modifier.fillMaxWidth())
-        if(state.error.isNotEmpty())Text(LocaleStrings.get(state.error),color=MaterialTheme.colorScheme.error)
-        if(operations.error.isNotEmpty())Text(LocaleStrings.get(operations.error),color=MaterialTheme.colorScheme.error)
-        if(operations.message.isNotEmpty())Text(LocaleStrings.get(operations.message))
-        if(!state.loading&&state.rows.isEmpty())Text(LocaleStrings.get("No confirmed participants yet."))
-        if(state.more)OutlinedButton(onClick={feed.load(false)},enabled=!state.loading){Text(LocaleStrings.get("Load more"))}
-        TextButton(onClick={feed.load()},enabled=!state.loading&&!operations.busy){Text(LocaleStrings.get("Refresh"))}
-    }
-}

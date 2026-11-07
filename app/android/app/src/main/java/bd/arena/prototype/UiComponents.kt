@@ -20,12 +20,13 @@ import androidx.compose.ui.unit.dp
 internal fun modeArtwork(mode:String)=when(mode.lowercase()){ "duo"->R.drawable.mode_duo;"squad"->R.drawable.mode_squad;else->R.drawable.mode_solo }
 @Composable
 internal fun ScreenHeader(title:String,back:(()->Unit)?=null,refresh:(()->Unit)?=null,refreshEnabled:Boolean=true,actions:@Composable RowScope.()->Unit={}) {
+    if(refresh!=null&&LocalFixedRefresh.current!=null)RegisterRefresh(refreshEnabled,refresh)
     Row(Modifier.fillMaxWidth().testTag("screen-header"),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         if(back!=null)IconButton(onClick=back){Icon(painterResource(R.drawable.ic_back),LocaleStrings.get("Back"))}
         if(title=="Antihack Tour")Box(Modifier.weight(1f)){BrandLogo(Modifier.size(76.dp).testTag("home-logo"))}
         else Text(title,style=MaterialTheme.typography.headlineMedium,modifier=Modifier.weight(1f).semantics{heading()})
         actions()
-        if(refresh!=null)IconButton(onClick=refresh,enabled=refreshEnabled){Icon(painterResource(R.drawable.ic_refresh),LocaleStrings.get("Refresh"))}
+        if(refresh!=null&&LocalFixedRefresh.current==null)IconButton(onClick=refresh,enabled=refreshEnabled){Icon(painterResource(R.drawable.ic_refresh),LocaleStrings.get("Refresh"))}
     }
 }
 @Composable
