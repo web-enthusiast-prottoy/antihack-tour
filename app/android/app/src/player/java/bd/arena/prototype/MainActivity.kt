@@ -70,6 +70,7 @@ private fun AntihackTourApp() {
     LocalizedTypography(bangla) {
         val changeLanguage: (Boolean)->Unit = { bangla=it;prefs.edit().putBoolean("bangla",it).apply() }
         PlayerApp(session,bangla,changeLanguage)
+        PlayerUpdateNotice(bangla)
     }
 }
 

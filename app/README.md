@@ -1,3 +1,7 @@
+# GitHub player updates — 1.0.8
+
+The player app checks automatically for newer public GitHub releases when opened/resumed and hourly while open. Users choose Download update, then open the APK and approve Android installation. Install 1.0.8 once to enable future notices. [Latest player release](https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest). [Update and publishing instructions](APP-UPDATES.md).
+
 # Production update — 8 November 2026
 
 Live signed APKs: [Antihack Tour 1.0.7](releases/antihack-tour-1.0.7.apk) and [Antihack Admin 1.0.12](releases/antihack-admin-1.0.12.apk). Updated scheduling and combined-balance entry rules are deployed and verified. See [production release notes](PRODUCTION-RELEASE.md).
