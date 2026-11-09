@@ -62,7 +62,7 @@ def main():
     # Create a draft first: incomplete uploads cannot become visible to the updater.
     release = request(f"https://api.github.com/repos/{REPO}/releases", json.dumps({
         "tag_name": tag, "target_commitish": args.commit, "name": f"Antihack Tour {version}",
-        "body": args.notes.read_text(), "draft": True, "prerelease": False,
+        "body": args.notes.read_text().rstrip() + "\n\n<!-- antihack-player-update\n" + manifest.decode() + "\n-->", "draft": True, "prerelease": False,
     }).encode())
     print(f"Created draft release {release['id']}", flush=True)
     upload = release["upload_url"].split("{")[0]

@@ -1,3 +1,7 @@
+# Update detection repair — 1.0.10
+
+Repairs update detection when the GitHub release-download gateway fails, using the public API, a separate fallback and shorter failure retries. If 1.0.8 never shows an alert, install 1.0.10 once over the existing app to repair its checker. [Latest player release](https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest).
+
 # Player match history — 1.0.9
 
 Matches leave Explore more than five minutes after their scheduled start. Matches → Results → My results includes the signed-in player's past confirmed participation, with Results pending until scores are published. Published history is retained through private ownership links. [Latest player release](https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest).

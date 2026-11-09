@@ -1,3 +1,7 @@
+# Update detection repair — 9 November 2026
+
+Player **1.0.10 / code 22** adds GitHub API release discovery, preserves the download-manifest fallback, and retries failed checks after one minute with bounded backoff. The publisher includes update metadata in the release API response. Existing 1.0.8 installations affected by a failing download endpoint need one manual upgrade, keeping their current app installed. This update retains 1.0.9 match/history behavior and requires no production backend or financial changes.
+
 # Match visibility and participant history — 9 November 2026
 
 Player **1.0.9 / code 21** hides matches in Explore more than five minutes after the scheduled start. Matches → Results → My results shows the signed-in player's past confirmed participation, including Results pending until a score is published. Published history remains readable through existing private ownership links.

@@ -23,3 +23,20 @@ class AppUpdatesTest {
         }
     }
 }
+
+class AppUpdateTransportTest {
+    @Test fun acceptsExactSizeAndUtf8Response() {
+        val bytes="নতুন আপডেট".toByteArray(Charsets.UTF_8)
+        assertEquals("নতুন আপডেট",readUpdateText(bytes.inputStream(),bytes.size))
+    }
+    @Test(expected=java.io.IOException::class) fun rejectsOversizedUpdateResponse() {
+        readUpdateText(ByteArray(8193).inputStream(),8192)
+    }
+    @Test fun failedCheckRetriesSoonWithBoundedBackoffAndSuccessUsesHourlyCheck() {
+        assertEquals(60_000L,updateRetryDelay(1))
+        assertEquals(120_000L,updateRetryDelay(2))
+        assertEquals(240_000L,updateRetryDelay(3))
+        assertEquals(1_800_000L,updateRetryDelay(20))
+        assertEquals(3_600_000L,updateRetryDelay(0))
+    }
+}

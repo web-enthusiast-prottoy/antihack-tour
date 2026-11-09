@@ -55,4 +55,20 @@ class AppUpdatesUiTest {
         ui.onNodeWithText("পরে").assertIsDisplayed().assertHasClickAction()
         capture("bangla-large")
     }
+    @Test fun realPublishedReleaseShowsAlertForVersion108() {
+        var failure=""
+        ui.activity.setContent {
+            var available by remember { mutableStateOf<PlayerUpdate?>(null) }
+            LaunchedEffect(Unit) {
+                try {available=fetchPlayerUpdate(20)}catch(error:Exception){failure=error.toString()}
+            }
+            MaterialTheme {available?.let{PlayerUpdateDialog(it,false,false,{},{})}}
+        }
+        ui.waitUntil(60_000){failure.isNotEmpty()||ui.onAllNodesWithText("Update available").fetchSemanticsNodes().isNotEmpty()}
+        assertEquals("",failure)
+        ui.onNodeWithText("Update available").assertIsDisplayed()
+        ui.onNodeWithText("Download update").assertIsDisplayed().assertHasClickAction()
+        capture("real-published-release")
+    }
+
 }
