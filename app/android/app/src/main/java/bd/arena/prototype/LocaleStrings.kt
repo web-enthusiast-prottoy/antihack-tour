@@ -14,6 +14,8 @@ internal object LocaleStrings {
     }
     fun get(text:String,fallback:String=text)=values[text]?:fallback
     private val ids=mapOf(
+        "Saved match history · reconnect to refresh." to R.string.match_history_cached,
+        "No past participated matches found." to R.string.match_history_empty,
         "Connecting to run match schedules." to R.string.online_schedule_0,
         "Waiting to confirm schedules online." to R.string.online_schedule_1,
         "No active match schedules." to R.string.online_schedule_2,

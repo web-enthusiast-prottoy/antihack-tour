@@ -4,7 +4,7 @@ Antihack Tour 1.0.8 (version code 20) introduces automatic checks for published 
 
 The live player app checks the public GitHub release record on foreground entry and hourly while open. Local sample builds do not check. Missing releases, invalid records and network errors never prevent using the app. A newer valid player version shows an English/Bangla update dialog with Download update and Later. Download opens the browser; users open the downloaded APK and approve Android installation. This is automatic detection, not silent installation or automatic downloading. Android may require permission to install from the browser. Existing publisher/device verification restrictions still apply.
 
-Latest download: https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest/download/antihack-tour-1.0.8.apk
+Latest download: https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest/download/antihack-tour-1.0.9.apk
 
 Release record: https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest/download/player-update.json
 

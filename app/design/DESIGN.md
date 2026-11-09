@@ -150,3 +150,7 @@ Matches → Schedules shows the local online-admin service status, each saved ra
 Scheduling uses minutes between fixed match starts. Saving creates today's remaining slots together; a date range creates each later day's batch on that day in Bangladesh time. Helper text explains the inclusive aligned end time and the online admin requirement. Schedule cards show next daily batch, generation state and scheduled run times. All matches created refers to creation, independent of game completion.
 
 Paid-entry review explains deposit-first charging followed by available winnings. Join eligibility uses both balances, excludes withdrawal reserves and waits for the current wallet to load. Wallet explains that only winnings can be withdrawn. Cancellation refunds restore the original funding sources. English/Bangla copy follows the existing native controls and layout.
+
+## Player match history — 9 November 2026
+
+Public browsing hides a match more than five minutes after its scheduled start. Home remains categories/announcements. Matches → Results defaults to My results for signed-in users: confirmed past participation appears newest first, with Results pending until a public score exists. Publication updates that same match row with the existing placement/kills/reward details. Search covers ID/title; saved history is labelled and errors offer retry. Keep existing My Matches room access and the separate All published view. English/Bangla copy uses the established native cards and semantic theme colors.

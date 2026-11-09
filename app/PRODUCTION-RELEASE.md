@@ -1,3 +1,9 @@
+# Match visibility and participant history — 9 November 2026
+
+Player **1.0.9 / code 21** hides matches in Explore more than five minutes after the scheduled start. Matches → Results → My results shows the signed-in player's past confirmed participation, including Results pending until a score is published. Published history remains readable through existing private ownership links.
+
+This release uses the existing live Firebase project, production package and signing identity. It requires no backend deployment. Install over the existing app; the GitHub update record makes it discoverable to 1.0.8 users. [Release](https://github.com/web-enthusiast-prottoy/antihack-tour/releases/tag/player-v1.0.9). Verification is recorded in `verification/player-1.0.9/REVIEW.md`.
+
 # Daily schedules and combined entry balances — 8 November 2026
 
 Production updates: [Player 1.0.7 / code 19](releases/antihack-tour-1.0.7.apk) and [Admin 1.0.12 / code 24](releases/antihack-admin-1.0.12.apk). Both are signed non-debuggable live APKs retaining the production signing identity. Install over the existing production apps; distribute only the player APK to players and update all staff phones.

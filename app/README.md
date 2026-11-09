@@ -1,3 +1,7 @@
+# Player match history — 1.0.9
+
+Matches leave Explore more than five minutes after their scheduled start. Matches → Results → My results includes the signed-in player's past confirmed participation, with Results pending until scores are published. Published history is retained through private ownership links. [Latest player release](https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest).
+
 # GitHub player updates — 1.0.8
 
 The player app checks automatically for newer public GitHub releases when opened/resumed and hourly while open. Users choose Download update, then open the APK and approve Android installation. Install 1.0.8 once to enable future notices. [Latest player release](https://github.com/web-enthusiast-prottoy/antihack-tour/releases/latest). [Update and publishing instructions](APP-UPDATES.md).

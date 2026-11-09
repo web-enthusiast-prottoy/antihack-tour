@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="match_history_cached">সংরক্ষিত ম্যাচের ইতিহাস · হালনাগাদ করতে সংযোগ দিন।</string>
+    <string name="match_history_empty">অংশ নেওয়া কোনো পুরোনো ম্যাচ পাওয়া যায়নি।</string>
+</resources>

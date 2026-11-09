@@ -15,11 +15,18 @@ fun registrationResult(match: Tournament, registered: Set<String>): JoinResult =
     else -> JoinResult.REGISTERED
 }
 
+internal fun matchInResultHistory(startsAt:Long,now:Long):Boolean = startsAt>0 && now>startsAt && now-startsAt>5*60*1000L
+
+internal fun participantHistoryMatches(matches:List<Tournament>,entries:Map<String,String>,published:Set<String>,search:String,now:Long):List<Tournament> =
+    matches.filter { entries[it.id]=="confirmed" && (matchInResultHistory(it.startsAtMillis,now)||it.id in published) &&
+        (search.isBlank()||it.id.contains(search.trim(),true)||it.title.contains(search.trim(),true)) }.sortedByDescending{it.startsAtMillis}
+
 internal fun browseMatches(matches: List<Tournament>, search: String, mode: String, fee: String, availability: String, time: String, now: Long): List<Tournament> {
     val today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.of("Asia/Dhaka")).toLocalDate()
     return matches.filter { match ->
         val date = match.startsAtMillis.takeIf { it > 0 }?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.of("Asia/Dhaka")).toLocalDate() }
-        (search.isBlank() || match.id.contains(search.trim(), true) || match.title.contains(search.trim(), true)) &&
+        !matchInResultHistory(match.startsAtMillis,now) &&
+            (search.isBlank() || match.id.contains(search.trim(), true) || match.title.contains(search.trim(), true)) &&
             (mode == "All" || match.mode.equals(mode, true)) &&
             (fee == "All" || if (fee == "Free") match.fee == 0L else match.fee > 0) &&
             (availability == "All" || if (availability == "Available") !match.closed && match.joined < match.capacity else !match.closed && match.joined >= match.capacity) &&

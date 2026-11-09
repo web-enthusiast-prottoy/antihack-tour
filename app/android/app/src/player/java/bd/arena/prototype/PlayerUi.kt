@@ -121,7 +121,10 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
             if(tab=="Explore"&&selected==null&&filtering&&data.matchesMore&&!data.matchesLoading)data.loadMoreMatches()
         }
         var now by remember { mutableStateOf(System.currentTimeMillis()) }
-        LaunchedEffect(tab) { while(true) { now=System.currentTimeMillis(); kotlinx.coroutines.delay(30000) } }
+        LaunchedEffect(tab) { while(true) { now=System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+        LaunchedEffect(tab,selected,now,data.matchesMore,data.matchesLoading) {
+            if(tab=="Explore"&&selected==null&&data.matchesMore&&!data.matchesLoading&&data.matches.none{!matchInResultHistory(it.startsAtMillis,now)})data.loadMoreMatches()
+        }
         var noticeRetry by remember {mutableStateOf(0)}
         var feed by remember {mutableStateOf(NoticeFeed())}
         val context=androidx.compose.ui.platform.LocalContext.current
