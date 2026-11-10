@@ -105,14 +105,16 @@ service cloud.firestore {
         t.categoryId is string && t.categoryId.size() <= 150 && (t.categoryId == '' || get(/databases/$(database)/documents/categories/$(t.categoryId)).data.active == true) && validArtwork(t);
     }
     match /matchSchedules/{id} {
+      allow delete: if owner() && expiredSchedule(resource.data) && audited('deleteMatchSchedule_' + id,'deleteMatchSchedule','matchSchedules/' + id);
       allow read: if admin() && (request.method == 'get' || bounded());
       allow create: if admin() && id.matches('[A-Za-z0-9]{20}') &&
         request.resource.data.keys().hasAll(['template','prizes','dateFrom','dateTo','fromMinute','toMinute','delayMinutes','timezone','state','revision','createdAt','createdBy','updatedAt','updatedBy']) &&
-        request.resource.data.keys().hasOnly(['template','prizes','dateFrom','dateTo','fromMinute','toMinute','delayMinutes','timezone','state','revision','createdAt','createdBy','updatedAt','updatedBy']) &&
+        request.resource.data.keys().hasOnly(['template','prizes','dateFrom','dateTo','releaseDate','fromMinute','toMinute','delayMinutes','timezone','state','revision','createdAt','createdBy','updatedAt','updatedBy']) &&
         validScheduleTemplate(request.resource.data.template) && request.resource.data.prizes is list &&
         request.resource.data.prizes.size() >= 1 && request.resource.data.prizes.size() <= 400 && request.resource.data.prizes.size() <= request.resource.data.template.capacity &&
         request.resource.data.dateFrom is string && request.resource.data.dateFrom.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') &&
         request.resource.data.dateTo is string && request.resource.data.dateTo.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && request.resource.data.dateFrom <= request.resource.data.dateTo &&
+        validScheduleRelease(request.resource.data) &&
         request.resource.data.fromMinute is int && request.resource.data.fromMinute >= 0 &&
         request.resource.data.toMinute is int && request.resource.data.toMinute <= 1439 && request.resource.data.toMinute > request.resource.data.fromMinute &&
         request.resource.data.delayMinutes is int && request.resource.data.delayMinutes >= 1 && request.resource.data.delayMinutes <= 1440 &&
@@ -129,6 +131,25 @@ service cloud.firestore {
         allow create: if admin() && validScheduledRun(id,run);
       }
     }
+    function scheduleMidnight(day) {
+      let date = day.split('-');
+      return timestamp.date(int(date[0]),int(date[1]),int(date[2])) - duration.value(6,'h');
+    }
+    function validScheduleRelease(d) {
+      return !('releaseDate' in d) || (d.releaseDate is string && d.releaseDate.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') &&
+        d.dateFrom == d.dateTo && d.releaseDate <= d.dateFrom && scheduleMidnight(d.releaseDate) <= scheduleMidnight(d.dateFrom));
+    }
+    function releasedScheduleMatch(s,m) {
+      let start = scheduleMidnight(s.dateFrom) + duration.value(s.fromMinute,'m');
+      let end = scheduleMidnight(s.dateTo) + duration.value(s.toMinute,'m');
+      return request.time >= scheduleMidnight(s.releaseDate) && m.startsAt >= start && m.startsAt <= end &&
+        (m.startsAt.toMillis() - start.toMillis()) % (s.delayMinutes * 60000) == 0;
+    }
+    function expiredSchedule(d) {
+      let date = d.dateTo.split('-');
+      let end = timestamp.date(int(date[0]),int(date[1]),int(date[2])) - duration.value(6,'h') + duration.value(d.toMinute,'m');
+      return request.time > end;
+    }
     match /schedulerStatus/{id} {
       allow read: if admin() && id == 'matches' && request.method == 'get';
     }
@@ -141,7 +162,7 @@ service cloud.firestore {
       let p = getAfter(/databases/$(database)/documents/matchScheduleProgress/$(id)).data;
       let d = request.resource.data;
       let m = getAfter(/databases/$(database)/documents/matches/$(d.match)).data;
-      return s.state == 'active' && d.keys().hasAll(['sequence','match','createdAt','scheduleRevision']) &&
+      return s.state == 'active' && (!('releaseDate' in s) || releasedScheduleMatch(s,m)) && d.keys().hasAll(['sequence','match','createdAt','scheduleRevision']) &&
         d.keys().hasOnly(['sequence','match','createdAt','scheduleRevision','startsAt']) && d.sequence is int && d.sequence >= 1 &&
         run == string(d.sequence) && d.match == 'schedule_' + id + '_' + run &&
         d.createdAt == request.time && d.scheduleRevision == s.revision &&
@@ -341,6 +362,7 @@ service cloud.firestore {
       allow read: if (request.method == 'get' || bounded());
       allow create: if admin() && validPublishedResult(id);
       allow update: if admin() && prizeResultAllowed(id);
+      allow create, update: if admin() && rewardSummaryAllowed(id);
       // Outcome corrections cannot overwrite published history.
     }
     match /resultLinks/{id} {
@@ -353,6 +375,7 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/results/$(id)).data.match == request.resource.data.match &&
         request.resource.data.titleSearch == getAfter(/databases/$(database)/documents/results/$(id)).data.titleSearch &&
         request.resource.data.publishedAt == request.time;
+      allow create: if admin() && rewardLinkAllowed(id);
     }
     match /publishedPlacements/{id} {
       allow read: if admin() && (request.method == 'get' || bounded());
@@ -363,6 +386,7 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/results/$(request.resource.data.result)).data.placement == request.resource.data.placement &&
         getAfter(/databases/$(database)/documents/results/$(request.resource.data.result)).data.publishedAt == request.time &&
         getAfter(/databases/$(database)/documents/resultLinks/$(request.resource.data.result)).data.entry == request.resource.data.entry && request.resource.data.at == request.time;
+      allow create: if admin() && rewardClaimAllowed(id);
     }
     function freshPrize(entry) {
       let path = /databases/$(database)/documents/prizeCredits/$(entry);
@@ -442,6 +466,7 @@ service cloud.firestore {
       allow create: if admin() && request.resource.data.keys().hasOnly(['entry','result','match','placement','at']) &&
         id == request.resource.data.match + '_' + string(request.resource.data.placement) && freshPrize(request.resource.data.entry) &&
         getAfter(/databases/$(database)/documents/prizeCredits/$(request.resource.data.entry)).data.result == request.resource.data.result;
+      allow create: if admin() && rewardClaimAllowed(id);
     }
     function emptySettlement(id) {
       let d = request.resource.data;
@@ -453,6 +478,157 @@ service cloud.firestore {
     match /matchSettlements/{id} {
       allow read: if admin() && (request.method == 'get' || bounded());
       allow create, update: if admin() && (prizeProgressAllowed(id) || emptySettlement(id));
+      allow create, update: if admin() && rewardProgressAllowed(id);
+    }
+    function rewardFresh(key) {
+      return !exists(/databases/$(database)/documents/rewardCredits/$(key)) && getAfter(/databases/$(database)/documents/rewardCredits/$(key)).data.at == request.time;
+    }
+    function memberKillCounts(d, e) {
+      let a = d.memberKills;
+      return a is list && a.size() <= 4 && (a.size() == 0 ||
+        ((a.size() == e.get('roster',[e.username]).size()) &&
+         a[0] is int && a[0] >= 0 &&
+         (a.size() < 2 || (a[1] is int && a[1] >= 0)) &&
+         (a.size() < 3 || (a[2] is int && a[2] >= 0)) &&
+         (a.size() < 4 || (a[3] is int && a[3] >= 0)) &&
+         d.kills == a[0] + (a.size()>1?a[1]:0) + (a.size()>2?a[2]:0) + (a.size()>3?a[3]:0)));
+    }
+    function killDraftAllowed(entry) {
+      let d = request.resource.data;
+      let e = get(/databases/$(database)/documents/entries/$(entry)).data;
+      let old = resource == null ? {} : resource.data;
+      let legacyPath = /databases/$(database)/documents/resultDrafts/$(entry);
+      let paidPath = /databases/$(database)/documents/prizeCredits/$(entry);
+      return d.keys().hasAll(['uid','match','publicId','kills','memberKills','revision','updatedAt','updatedBy']) &&
+        d.keys().hasOnly(['uid','match','publicId','kills','memberKills','revision','updatedAt','updatedBy']) &&
+        entry == d.uid + '_' + d.match && e.uid == d.uid && e.match == d.match && e.status == 'confirmed' &&
+        d.publicId is string && d.publicId.matches('[A-Za-z0-9]{20}') &&
+        (resource == null ? (!exists(legacyPath) || d.publicId == get(legacyPath).data.publicId) :
+          (d.uid == old.uid && d.match == old.match && d.publicId == old.publicId)) &&
+        d.kills is int && d.kills >= 0 && d.kills <= 10000 && memberKillCounts(d,e) &&
+        (!exists(paidPath) || d.kills >= get(paidPath).data.kills) &&
+        !exists(/databases/$(database)/documents/rewardCredits/$(entry + '_kills')) &&
+        d.revision is int && d.revision == old.get('revision',0)+1 && d.updatedAt == request.time && d.updatedBy == request.auth.uid &&
+        (audited('kills_' + entry + '_' + string(d.revision),'saveKillDraft','killDrafts/' + entry) ||
+          (resource == null && d.kills == 0 && rewardFresh(entry + '_placement')));
+    }
+    match /killDrafts/{entry} {
+      allow read: if admin() && (request.method == 'get' || bounded());
+      allow create, update: if admin() && killDraftAllowed(entry);
+    }
+    function rewardMoney(c, key) {
+      let w = /databases/$(database)/documents/wallets/$(c.uid);
+      let l = /databases/$(database)/documents/walletLedger/$('reward_' + key);
+      return c.amountPaisa == 0 ? c.balanceAfter == (exists(w) ? get(w).data.get('winnings',0) : 0) :
+        (getAfter(w).data.lastReward == key && getAfter(w).data.winnings == c.balanceAfter &&
+         getAfter(l).data.reward == key && getAfter(l).data.delta == c.amountPaisa && getAfter(l).data.at == request.time);
+    }
+    function rewardCreditAllowed(key) {
+      let c = request.resource.data;
+      let e = get(/databases/$(database)/documents/entries/$(c.entry)).data;
+      let m = get(/databases/$(database)/documents/matches/$(c.match)).data;
+      let rp = /databases/$(database)/documents/results/$(c.result);
+      let before = exists(rp) ? get(rp).data : {};
+      let lp = /databases/$(database)/documents/prizeCredits/$(c.entry);
+      let legacy = exists(lp) ? get(lp).data : {};
+      let after = getAfter(rp).data;
+      let progress = getAfter(/databases/$(database)/documents/matchSettlements/$(c.match)).data;
+      return c.keys().hasAll(['entry','uid','match','result','kind','placement','kills','previousKills','previousKillPaisa','amountPaisa','placementPaisa','processedDelta','draftRevision','reason','balanceAfter','at','actor']) &&
+        c.keys().hasOnly(['entry','uid','match','result','kind','placement','kills','previousKills','previousKillPaisa','amountPaisa','placementPaisa','processedDelta','draftRevision','reason','balanceAfter','at','actor']) &&
+        c.kind in ['placement','kills'] && key == c.entry + '_' + c.kind && c.entry == c.uid + '_' + c.match &&
+        e.uid == c.uid && e.match == c.match && e.status == 'confirmed' &&
+        (!exists(rp) || before.get('rewardVersion',0) == 2 || (legacy.get('result','') == c.result && legacy.amountPaisa == before.creditedPaisa)) &&
+        c.previousKills == before.get('kills',0) && c.previousKillPaisa == before.get('killPaisa',legacy.get('amountPaisa',0)-legacy.get('placementPaisa',0)) &&
+        c.kills is int && c.kills >= c.previousKills && c.kills <= 10000 &&
+        c.amountPaisa is int && c.amountPaisa >= 0 && c.amountPaisa <= 9007199254740991 &&
+        c.reason is string && c.reason.size() <= 1000 &&
+        (c.kind == 'placement' ?
+          (before.get('placement',0) == 0 && !exists(lp) && c.placement is int && c.placement >= 1 && c.placement <= m.capacity &&
+           c.amountPaisa > 0 && c.amountPaisa == get(/databases/$(database)/documents/matches/$(c.match)/prizes/$(string(c.placement))).data.amountPaisa &&
+           c.placementPaisa == c.amountPaisa && c.kills == c.previousKills && c.draftRevision == 0) :
+          (c.placement == before.get('placement',0) && c.placementPaisa == 0 &&
+           c.amountPaisa == m.perKillPaisa * c.kills - c.previousKillPaisa && c.draftRevision is int && c.draftRevision > 0 &&
+           (!exists(lp) || c.amountPaisa == 0 || c.reason.matches('(?s).*\\S.*')))) &&
+        c.processedDelta == (c.kind == 'kills' && !exists(lp) ? 1 : 0) &&
+        after.lastReward == key && after.creditedPaisa == before.get('creditedPaisa',0) + c.amountPaisa &&
+        progress.lastReward == key && progress.updatedAt == request.time &&
+        c.balanceAfter is int && c.balanceAfter >= 0 && c.balanceAfter <= 9007199254740991 &&
+        c.at == request.time && c.actor == request.auth.uid && rewardMoney(c,key);
+    }
+    match /rewardCredits/{key} {
+      allow get: if admin() || (activeAccount() && resource != null && resource.data.uid == request.auth.uid);
+      allow list: if activeAccount() && (admin() || resource.data.uid == request.auth.uid) && bounded();
+      allow create: if admin() && rewardCreditAllowed(key);
+    }
+    function rewardSummaryAllowed(id) {
+      let d = request.resource.data;
+      let old = resource == null ? {} : resource.data;
+      let c = getAfter(/databases/$(database)/documents/rewardCredits/$(d.lastReward)).data;
+      let draft = getAfter(/databases/$(database)/documents/killDrafts/$(c.entry)).data;
+      let link = getAfter(/databases/$(database)/documents/resultLinks/$(id)).data;
+      return rewardFresh(d.lastReward) && c.result == id && draft.publicId == id && link.entry == c.entry &&
+        (resource == null ? rewardMetadata(d,c) : d.diff(old).affectedKeys().hasOnly(['rewardVersion','placement','kills','placementPaisa','killPaisa','awardPaisa','creditedPaisa','settlementStatus','killFinalized','lastReward'])) &&
+        d.rewardVersion == 2 && d.placement == c.placement && d.kills == c.kills &&
+        d.killPaisa == c.previousKillPaisa + (c.kind == 'kills' ? c.amountPaisa : 0) &&
+        d.creditedPaisa == old.get('creditedPaisa',0) + c.amountPaisa && d.creditedPaisa <= 9007199254740991 &&
+        d.placementPaisa == d.creditedPaisa - d.killPaisa && d.placementPaisa >= 0 &&
+        d.awardPaisa == d.creditedPaisa && d.settlementStatus == (d.creditedPaisa > 0 ? 'credited' : 'not_applicable') &&
+        d.killFinalized == (c.kind == 'kills' || old.get('killFinalized',false)) &&
+        (c.kind == 'kills' ? (draft.revision == c.draftRevision && draft.kills == d.kills) :
+          (getAfter(/databases/$(database)/documents/matchPlacements/$(c.match + '_' + string(c.placement))).data.result == id &&
+           getAfter(/databases/$(database)/documents/publishedPlacements/$(c.match + '_' + string(c.placement))).data.result == id)) &&
+        audited('reward_' + d.lastReward,'creditParticipantReward','rewardCredits/' + d.lastReward);
+    }
+    function rewardMetadata(d,c) {
+      let m = get(/databases/$(database)/documents/matches/$(c.match)).data;
+      let e = get(/databases/$(database)/documents/entries/$(c.entry)).data;
+      return d.keys().hasAll(['match','title','titleSearch','mode','map','startsAt','username','avatar','publishedAt','rewardVersion','placement','kills','placementPaisa','killPaisa','awardPaisa','creditedPaisa','settlementStatus','killFinalized','lastReward']) &&
+        d.keys().hasOnly(['match','title','titleSearch','mode','map','startsAt','username','avatar','publishedAt','rewardVersion','placement','kills','placementPaisa','killPaisa','awardPaisa','creditedPaisa','settlementStatus','killFinalized','lastReward']) &&
+        d.match == c.match && d.title == m.title && d.titleSearch == m.title.lower() && d.mode == m.mode && d.map == m.map && d.startsAt == m.startsAt &&
+        d.username == e.username && d.avatar in ['solo','duo','squad'] && d.publishedAt == request.time;
+    }
+    function rewardLinkAllowed(id) {
+      let d = request.resource.data;
+      let draft = getAfter(/databases/$(database)/documents/killDrafts/$(d.entry)).data;
+      let r = getAfter(/databases/$(database)/documents/results/$(id)).data;
+      return d.keys().hasAll(['uid','match','entry','result','titleSearch','publishedAt']) && d.keys().hasOnly(['uid','match','entry','result','titleSearch','publishedAt']) &&
+        d.entry == d.uid + '_' + d.match && d.uid == draft.uid && d.match == draft.match && draft.publicId == id && d.result == id &&
+        r.rewardVersion == 2 && rewardFresh(r.lastReward) && d.titleSearch == r.titleSearch && d.publishedAt == request.time;
+    }
+    function rewardClaimAllowed(id) {
+      let d = request.resource.data;
+      let key = d.entry + '_placement';
+      let c = getAfter(/databases/$(database)/documents/rewardCredits/$(key)).data;
+      return d.keys().hasAll(['entry','result','match','placement','at']) && d.keys().hasOnly(['entry','result','match','placement','at']) &&
+        rewardFresh(key) && c.kind == 'placement' && c.entry == d.entry && c.result == d.result && c.match == d.match && c.placement == d.placement &&
+        id == d.match + '_' + string(d.placement) && d.at == request.time;
+    }
+    function rewardWalletAllowed(uid) {
+      let d = request.resource.data;
+      let old = resource == null ? {} : resource.data;
+      let c = getAfter(/databases/$(database)/documents/rewardCredits/$(d.lastReward)).data;
+      return rewardFresh(d.lastReward) && c.uid == uid && c.amountPaisa > 0 &&
+        (resource == null ? (d.keys().hasAll(['balance','reservedWinnings','winnings','lastReward']) && d.keys().hasOnly(['balance','reservedWinnings','winnings','lastReward']) && d.balance == 0 && d.reservedWinnings == 0) : d.diff(old).affectedKeys().hasOnly(['winnings','lastReward'])) &&
+        d.winnings is int && d.winnings == old.get('winnings',0) + c.amountPaisa && d.winnings >= 0 && d.winnings <= 9007199254740991 - old.get('reservedWinnings',0) && c.balanceAfter == d.winnings;
+    }
+    function rewardLedgerAllowed(id) {
+      let d = request.resource.data;
+      let c = getAfter(/databases/$(database)/documents/rewardCredits/$(d.reward)).data;
+      return d.keys().hasAll(['uid','delta','type','status','currency','match','result','reference','reward','component','balanceAfter','at']) && d.keys().hasOnly(['uid','delta','type','status','currency','match','result','reference','reward','component','balanceAfter','at']) &&
+        rewardFresh(d.reward) && id == 'reward_' + d.reward && d.uid == c.uid && d.delta == c.amountPaisa && d.delta > 0 &&
+        d.type == 'prize' && d.status == 'completed' && d.currency == 'BDT' && d.match == c.match && d.result == c.result && d.reference == c.match &&
+        d.component == c.kind && d.balanceAfter == c.balanceAfter && d.at == request.time;
+    }
+    function rewardProgressAllowed(id) {
+      let d = request.resource.data;
+      let old = resource == null ? {} : resource.data;
+      let c = getAfter(/databases/$(database)/documents/rewardCredits/$(d.lastReward)).data;
+      let m = get(/databases/$(database)/documents/matches/$(id)).data;
+      return d.keys().hasAll(['processed','placementPaisa','creditedPaisa','lastEntry','lastReward','updatedAt']) && d.keys().hasOnly(['processed','placementPaisa','creditedPaisa','lastEntry','lastReward','updatedAt']) &&
+        rewardFresh(d.lastReward) && c.match == id && d.lastEntry == c.entry &&
+        d.processed == old.get('processed',0) + c.processedDelta && d.processed <= m.get('joined',0) &&
+        d.placementPaisa == old.get('placementPaisa',0) + c.placementPaisa && d.placementPaisa <= m.prizePaisa &&
+        d.creditedPaisa == old.get('creditedPaisa',0) + c.amountPaisa && d.creditedPaisa <= 9007199254740991 && d.updatedAt == request.time;
     }
     match /withdrawalPolicy/{id} {
       allow get: if activeAccount() && id == 'bkash';
@@ -616,18 +792,23 @@ service cloud.firestore {
           !existsAfter(/databases/$(database)/documents/categories/$(parts[1]))) ||
          (d.action == 'deleteMatch' && parts[0] == 'matches' &&
           exists(/databases/$(database)/documents/matches/$(parts[1])) &&
-          !existsAfter(/databases/$(database)/documents/matches/$(parts[1]))));
+          !existsAfter(/databases/$(database)/documents/matches/$(parts[1]))) ||
+         (d.action == 'deleteMatchSchedule' && parts[0] == 'matchSchedules' &&
+          exists(/databases/$(database)/documents/matchSchedules/$(parts[1])) &&
+          expiredSchedule(get(/databases/$(database)/documents/matchSchedules/$(parts[1])).data) &&
+          !existsAfter(/databases/$(database)/documents/matchSchedules/$(parts[1]))));
     }
     match /auditRecords/{id} {
       allow read: if admin() && (request.method == 'get' || bounded());
       allow create: if admin() && request.resource.data.keys().hasOnly(['action','path','actor','at','deposit','reason']) &&
         (request.resource.data.action == 'moderatePlayer' ? (request.resource.data.reason is string && request.resource.data.reason.size() > 0 && request.resource.data.reason.size() <= 1000) : !('reason' in request.resource.data)) &&
         (request.resource.data.action in ['approveDeposit','rejectDeposit'] ? financialAudit(id) : !('deposit' in request.resource.data)) &&
-        request.resource.data.action in ['saveMatchSchedule','moderatePlayer','deleteCategory','deleteMatch','confirmEntry','refundEntry','rejectEntry','create','update','saveRoom','saveResultDraft','publishResult','publishParticipant','savePage','replySupport','saveMatch','savePaymentInstructions','saveSupportSettings','approveDeposit','rejectDeposit','creditPrize','saveWithdrawalPolicy','approveWithdrawal','rejectWithdrawal','sendWithdrawal'] && request.resource.data.path is string &&
+        request.resource.data.action in ['deleteMatchSchedule','saveKillDraft','creditParticipantReward','saveMatchSchedule','moderatePlayer','deleteCategory','deleteMatch','confirmEntry','refundEntry','rejectEntry','create','update','saveRoom','saveResultDraft','publishResult','publishParticipant','savePage','replySupport','saveMatch','savePaymentInstructions','saveSupportSettings','approveDeposit','rejectDeposit','creditPrize','saveWithdrawalPolicy','approveWithdrawal','rejectWithdrawal','sendWithdrawal'] && request.resource.data.path is string &&
         request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time && (request.resource.data.action != 'creditPrize' || prizeAudit(id)) &&
         (!(request.resource.data.action in ['approveWithdrawal','rejectWithdrawal','sendWithdrawal']) || withdrawalAudit(id)) &&
         (request.resource.data.action != 'saveWithdrawalPolicy' || withdrawalPolicyAudit(id)) &&
-        (!(request.resource.data.action in ['deleteCategory','deleteMatch']) || deletionAudit(id)) &&
+        (!(request.resource.data.action in ['deleteCategory','deleteMatch','deleteMatchSchedule']) || deletionAudit(id)) &&
+        (request.resource.data.action != 'creditParticipantReward' || (request.resource.data.path == 'rewardCredits/' + id.replace('^reward_','') && rewardFresh(id.replace('^reward_','')))) &&
         (!(request.resource.data.action in ['confirmEntry','refundEntry','rejectEntry']) || entryAudit(id));
     }
     match /users/{uid} {
@@ -646,6 +827,7 @@ service cloud.firestore {
         (resource == null ? request.resource.data.keys().hasOnly(['balance','lastDeposit']) : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance','lastDeposit'])) &&
         getAfter(/databases/$(database)/documents/walletDeposits/$(request.resource.data.lastDeposit)).data.uid == uid && liveCredit(request.resource.data.lastDeposit);
       allow create, update: if (resource == null || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['winnings','lastPrize'])) && admin() && prizeWalletAllowed(uid);
+      allow create, update: if admin() && rewardWalletAllowed(uid);
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['winnings','reservedWinnings','lastWithdrawal']) && activeAccount() && withdrawalWallet(uid);
       allow update: if activeAccount() && request.resource.data.keys().hasAny(['lastEntry','lastRefund']) && paidWallet(uid);
     }
@@ -885,6 +1067,7 @@ service cloud.firestore {
       allow read: if activeAccount() && (resource.data.uid == request.auth.uid || admin()) && (request.method == 'get' || bounded());
       allow create: if request.resource.data.get('type','') == 'deposit' && admin() && id == 'live_deposit_' + request.resource.data.deposit && liveCredit(request.resource.data.deposit);
       allow create: if request.resource.data.get('type','') == 'prize' && admin() && prizeLedgerAllowed(id);
+      allow create: if request.resource.data.get('type','') == 'prize' && admin() && rewardLedgerAllowed(id);
       allow create: if request.resource.data.get('type','') == 'withdrawal' && admin() && withdrawalLedger(id);
       allow create: if activeAccount() && request.resource.data.keys().hasAll(['entry']) && paidLedger(id);
     }

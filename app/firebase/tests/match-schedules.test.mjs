@@ -2,7 +2,7 @@ import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 import {before,after,beforeEach,test} from 'node:test';
 import assert from 'node:assert/strict';
-import {validateTiming,nextWindowTime} from '../scripts/match-schedule-time.mjs';
+import {validateTiming,nextWindowTime,localInstant} from '../scripts/match-schedule-time.mjs';
 const require=createRequire(new URL('../../admin/package.json',import.meta.url));
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
 const {doc,setDoc,getDoc,getDocs,collection,limit,query,writeBatch,serverTimestamp}=require('firebase/firestore');
@@ -13,8 +13,9 @@ const timing={dateFrom:'2026-11-07',dateTo:'2026-11-15',fromMinute:540,toMinute:
 const template={title:'Sample scheduled match',description:'Local sample only.',image:'solo',mode:'solo',map:'Bermuda',capacity:48,entryPaisa:0,prizePaisa:10000,perKillPaisa:100,rules:'Sample',cancellationTerms:'Sample',categoryId:'',artworkId:''};
 let env,app,db;
 before(async()=>{
- process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8080';
- env=await initializeTestEnvironment({projectId,firestore:{host:'127.0.0.1',port:8080,rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});
+ const port=Number(process.env.ARENA_RULES_PORT??8080);
+ process.env.FIRESTORE_EMULATOR_HOST=`127.0.0.1:${port}`;
+ env=await initializeTestEnvironment({projectId,firestore:{host:'127.0.0.1',port,rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});
  app=initializeApp({projectId},'match-scheduler-tests');db=getFirestore(app);
 });
 after(async()=>{await env?.clearFirestore();await env?.cleanup();if(app)await deleteApp(app);});
@@ -127,4 +128,82 @@ test('a daily batch creates every future match immediately without any results',
  assert.equal((await db.collection('matches').get()).size,31);
  assert.equal((await db.collection(`matchSchedules/${id}/runs`).get()).size,31);
  assert.equal((await db.collection('prizeCredits').get()).size,0);
+});
+
+async function deleteSchedule(actor=staff(),audit=true,remove=true) {
+ const batch=writeBatch(actor);
+ if(remove)batch.delete(doc(actor,`matchSchedules/${id}`));
+ if(audit)batch.set(doc(actor,`auditRecords/deleteMatchSchedule_${id}`),{action:'deleteMatchSchedule',path:`matchSchedules/${id}`,actor:'operator',at:serverTimestamp()});
+ return batch.commit();
+}
+test('only an owner can delete an expired schedule atomically with its audit',async()=>{
+ await create({dateFrom:'2020-01-01',dateTo:'2020-01-01'});
+ await assertFails(deleteSchedule());
+ await db.doc('staffRoles/operator').update({owner:true});
+ await assertFails(deleteSchedule(staff(),false));
+ await assertFails(deleteSchedule(staff(),true,false));
+ await assertSucceeds(deleteSchedule());
+ assert.equal((await db.doc(`matchSchedules/${id}`).get()).exists,false);
+ assert.equal((await db.doc(`auditRecords/deleteMatchSchedule_${id}`).get()).data().action,'deleteMatchSchedule');
+});
+test('future schedules cannot be deleted even if all matches were created already',async()=>{
+ await db.doc('staffRoles/operator').update({owner:true});
+ await create({dateFrom:'2099-01-01',dateTo:'2099-01-01'});
+ await state('completed');await assertFails(deleteSchedule());
+});
+test('schedule cleanup retains generated matches, progress, runs and financial records',async()=>{
+ await create({dateFrom:'2020-01-01',dateTo:'2020-01-01'});await draft(staff(),{status:'open'});
+ await db.doc('staffRoles/operator').update({owner:true});
+ await db.doc('entries/sample').set({match:`schedule_${id}_1`,status:'confirmed'});
+ await db.doc('results/sample').set({match:`schedule_${id}_1`});
+ await db.doc('walletLedger/sample').set({amountPaisa:100});
+ await assertSucceeds(deleteSchedule());
+ for(const path of [`matches/schedule_${id}_1`,`matchSchedules/${id}/runs/1`,`matchScheduleProgress/${id}`,'entries/sample','results/sample','walletLedger/sample'])assert.equal((await db.doc(path).get()).exists,true,path);
+});
+test('players and guests cannot delete even an expired schedule',async()=>{
+ await create({dateFrom:'2020-01-01',dateTo:'2020-01-01'});
+ for(const actor of [env.unauthenticatedContext().firestore(),env.authenticatedContext('player').firestore()])await assertFails(deleteSchedule(actor,false));
+});
+
+const bangladeshToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const nextDay=day=>new Date(Date.parse(day+'T00:00:00Z')+86400000).toISOString().slice(0,10);
+test('single-date release schema rejects ranges and release dates after the match date',async()=>{
+ const releaseDate=bangladeshToday(),matchDate=nextDay(releaseDate);
+ const single={dateFrom:matchDate,dateTo:matchDate,releaseDate};
+ for(const patch of [{releaseDate:nextDay(matchDate)},{releaseDate:'invalid'},{releaseDate:'2026-02-30'},{dateTo:nextDay(matchDate)}]) {
+  assert.throws(()=>validateTiming({...timing,...single,...patch}));
+  await assertFails(create({...single,...patch}));
+ }
+ await assertSucceeds(create(single));
+ await assertFails(state('paused',{releaseDate:matchDate}));
+});
+test('release date opens all next-day matches for public browsing and registration',async()=>{
+ const releaseDate=bangladeshToday(),matchDate=nextDay(releaseDate);
+ await create({dateFrom:matchDate,dateTo:matchDate,releaseDate});
+ const starts=localInstant(matchDate,540);
+ await assertSucceeds(draft(staff(),{status:'open',startsAt:new Date(starts)}));
+ await assertSucceeds(draft(staff(),{sequence:2,status:'open',startsAt:new Date(starts+20*60000)}));
+ const guest=env.unauthenticatedContext().firestore();
+ assert.equal((await getDoc(doc(guest,`matches/schedule_${id}_1`))).data().status,'open');
+ assert.equal((await getDoc(doc(guest,`matches/schedule_${id}_2`))).data().startsAt.toMillis(),starts+20*60000);
+ await db.doc('users/early-player').set({displayName:'Early player',ffUsername:'EarlyPlayer',ffUid:'',avatar:'solo'});
+ const player=env.authenticatedContext('early-player').firestore(),match=`schedule_${id}_1`,batch=writeBatch(player);
+ batch.set(doc(player,`entries/early-player_${match}`),{uid:'early-player',match,username:'EarlyPlayer',status:'confirmed',fee:0,createdAt:serverTimestamp()});
+ batch.update(doc(player,`matches/${match}`),{joined:1});
+ await assertSucceeds(batch.commit());
+ assert.equal((await getDoc(doc(player,`entries/early-player_${match}`))).data().status,'confirmed');
+});
+test('future release dates cannot create public matches before Bangladesh midnight',async()=>{
+ const releaseDate=nextDay(bangladeshToday()),matchDate=nextDay(releaseDate);
+ await create({dateFrom:matchDate,dateTo:matchDate,releaseDate});
+ await assertFails(draft(staff(),{status:'open',startsAt:new Date(localInstant(matchDate,540))}));
+ assert.equal((await db.collection('matches').get()).size,0);
+});
+test('released single-day runs must use the chosen match date, time window and interval',async()=>{
+ const releaseDate=bangladeshToday(),matchDate=nextDay(releaseDate);
+ await create({dateFrom:matchDate,dateTo:matchDate,releaseDate});
+ for(const startsAt of [localInstant(releaseDate,540),localInstant(matchDate,539),localInstant(matchDate,541),localInstant(matchDate,1381),localInstant(nextDay(matchDate),540)]) {
+  await assertFails(draft(staff(),{status:'open',startsAt:new Date(startsAt)}));
+ }
+ await assertSucceeds(draft(staff(),{status:'open',startsAt:new Date(localInstant(matchDate,1380))}));
 });

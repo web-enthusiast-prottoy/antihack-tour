@@ -62,23 +62,32 @@ class SettlementUiTest {
             waitText("Prize positions")
             enabled("#1").performClick()
             ui.onNodeWithTag("winner-participant-picker").performClick()
-            waitText("UUID: $uid")
+            waitText("Account ID: $uid")
             ui.onNodeWithText(name).performClick()
-            node("Kills").performTextReplacement("4")
-            node("Save and credit").performScrollTo()
-            ui.onNodeWithText(money(52000)).assertExists();capture("review")
-            enabled("Save and credit").performClick();waitText("Prize credited to winnings.")
+            ui.onNodeWithTag("credit-placement").performClick();waitText("Placement prize credited.")
+            assertEquals(initialWinnings+50000,Tasks.await(session.db.document("wallets/$uid").get(Source.SERVER),20,TimeUnit.SECONDS).getLong("winnings"))
+            ui.onNodeWithText("Player kills").performClick()
+            ui.waitUntil(20_000){ui.onAllNodesWithTag("kills-${uid}_$id-0").fetchSemanticsNodes().isNotEmpty()}
+            ui.onNodeWithTag("kills-${uid}_$id-0").performTextReplacement("4")
+            ui.onNodeWithTag("review-kill-credits").performClick()
+            ui.waitUntil(20_000){ui.onAllNodes(hasTestTag("confirm-kill-credits") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
+            capture("review")
+            ui.onNodeWithTag("confirm-kill-credits").performScrollTo().performClick();waitText("Kill rewards finalized.")
             val credited=Tasks.await(session.db.document("wallets/$uid").get(Source.SERVER),20,TimeUnit.SECONDS)
             assertEquals(deposit,credited.getLong("balance"));assertEquals(initialWinnings+52000,credited.getLong("winnings"))
             assertEquals("open",Tasks.await(session.db.document("matches/$id").get(Source.SERVER),20,TimeUnit.SECONDS).getString("status"))
             saveLifecycleFixture(session,id,mapOf("status" to "review"))
             // Reopen to fetch the updated match status without changing the winner.
             ui.onNodeWithText("Participants").performScrollTo().performClick();ui.onNodeWithText("Results").performScrollTo().performClick()
+            ui.onNodeWithText("Winners").performClick()
             waitText("Complete settlement");enabled("Complete settlement").performClick();waitText("Match settlement complete.");capture("complete")
-            val credit=Tasks.await(session.db.document("prizeCredits/${uid}_$id").get(Source.SERVER),20,TimeUnit.SECONDS)
+            val credit=Tasks.await(session.db.document("rewardCredits/${uid}_${id}_kills").get(Source.SERVER),20,TimeUnit.SECONDS)
+            val draft=Tasks.await(session.db.document("killDrafts/${uid}_$id").get(Source.SERVER),20,TimeUnit.SECONDS)
+            val entry=Tasks.await(session.db.document("entries/${uid}_$id").get(Source.SERVER),20,TimeUnit.SECONDS)
             val result=Tasks.await(session.db.document("results/${credit.getString("result")}").get(Source.SERVER),20,TimeUnit.SECONDS)
-            val engine=WinningsSettlement(session);var retried=false
-            engine.credit(result){retried=true};ui.waitUntil(20_000){retried}
+            assertEquals(50000L,result.getLong("placementPaisa"));assertEquals(2000L,result.getLong("killPaisa"))
+            val engine=ParticipantRewards(session);var retried=false
+            engine.creditKills(listOf(ReviewedKills(entry,draft.getLong("revision")!!,4,500,0)),""){retried=true};ui.waitUntil(20_000){retried}
             assertEquals(initialWinnings+52000,Tasks.await(session.db.document("wallets/$uid").get(Source.SERVER),20,TimeUnit.SECONDS).getLong("winnings"))
             assertEquals("settled",Tasks.await(session.db.document("matches/$id").get(Source.SERVER),20,TimeUnit.SECONDS).getString("status"))
             session.auth.signOut()

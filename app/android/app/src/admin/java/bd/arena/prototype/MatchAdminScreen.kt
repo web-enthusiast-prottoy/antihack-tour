@@ -12,6 +12,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
@@ -32,15 +34,12 @@ private fun wt(text: String) = LocaleStrings.get(text)
 @Composable
 internal fun MatchAdminScreen(session:AdminSession,match:DocumentSnapshot,back:()->Unit,edit:(()->Unit)?=null) {
     BackHandler {back()}
-    var section by remember {mutableStateOf("room")}
+    var section by rememberSaveable(match.id) {mutableStateOf("room")}
+    val resultState=rememberSaveableStateHolder()
     val scroll=rememberScrollState()
     LaunchedEffect(section){scroll.scrollTo(0)}
-    Column(Modifier.widthIn(max=640.dp).fillMaxSize().imePadding().verticalScroll(scroll).padding(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.widthIn(max=640.dp).fillMaxSize().imePadding().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         ScreenHeader(match.getString("title").orEmpty(),back=back)
-        if (edit != null && match.getString("status") !in listOf("cancelled", "settled")) {
-            OutlinedButton(onClick = edit) { Text(wt("Edit match")) }
-        }
-        DeleteRecordButton(session, "matches", match.id, match.getString("title").orEmpty(), back)
         FlowRow(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             FilterChip(section=="room",{section="room"},label={Text(wt("Match room"))})
             FilterChip(section=="prizes",{section="prizes"},label={Text(wt("Prizes"))})
@@ -49,11 +48,17 @@ internal fun MatchAdminScreen(session:AdminSession,match:DocumentSnapshot,back:(
             if((match.getLong("entryPaisa")?:0)>0)FilterChip(section=="refunds",{section="refunds"},label={Text(wt("Entry refunds"))})
             FilterChip(section=="history",{section="history"},label={Text(wt("Match history"))})
         }
-        if(section=="room") RoomEditor(session,match.id) else if(section=="prizes")PrizePanel(session,match.id,true) else if(section=="results") ResultEditor(session,match.id) else if(section=="participants")ParticipantAdmin(session,match.id)else if(section=="refunds")PaidRefunds(session,match.id)else {
+        if(section=="results")resultState.SaveableStateProvider("results"){ResultEditor(session,match.id)} else Column(Modifier.weight(1f).verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        if (edit != null && match.getString("status") !in listOf("cancelled", "settled")) {
+            OutlinedButton(onClick = edit) { Text(wt("Edit match")) }
+        }
+        DeleteRecordButton(session, "matches", match.id, match.getString("title").orEmpty(), back)
+        if(section=="room") RoomEditor(session,match.id) else if(section=="prizes")PrizePanel(session,match.id,true) else if(section=="participants")ParticipantAdmin(session,match.id)else if(section=="refunds")PaidRefunds(session,match.id)else {
             LabeledValue(wt("Match ID"), match.id)
             LabeledValue(wt("Entries"), "${match.getLong("joined") ?: 0}/${match.getLong("capacity") ?: 0}")
             LabeledValue(wt("Entry fee"), money(match.getLong("entryPaisa") ?: 0))
             MatchHistory(session,match.id)
+        }
         }
     }
 }

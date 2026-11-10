@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
@@ -24,12 +25,17 @@ import java.util.concurrent.TimeUnit
 
 class MatchSchedulesUiTest {
     @get:Rule val ui=createAndroidComposeRule<AdminActivity>()
+    private fun capture(name:String) {
+        val bitmap=ui.onRoot().captureToImage().asAndroidBitmap()
+        java.io.File(ui.activity.getExternalFilesDir(null),name).outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+        bitmap.recycle()
+    }
     private fun waitText(text:String){ui.waitUntil(20_000){ui.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()}}
     private fun field(text:String):SemanticsNodeInteraction {
         ui.onNodeWithTag("admin-records").performScrollToNode(hasText(text))
         return ui.onNodeWithText(text).performScrollTo()
     }
-    @Test fun matchFormCreatesTodaysBatchBeforeReportingSuccess() {
+    @Test fun matchFormSavesOneMatchDateAndMidnightReleaseBeforeReportingSuccess() {
         check(BuildConfig.FIREBASE_USE_EMULATOR)
         ui.activity.getSharedPreferences("settings",0).edit().putBoolean("bangla",false).commit()
         ui.activityRule.scenario.recreate()
@@ -48,16 +54,24 @@ class MatchSchedulesUiTest {
             field("Add prize position").performClick()
             field("Prize (taka) · #1").performTextReplacement("50")
             ui.onNodeWithText("Scheduling").performClick()
-            ui.onNodeWithContentDescription("Repeat this match automatically").performScrollTo().performClick()
+            ui.onNodeWithContentDescription("Create matches for one day").performScrollTo().performClick()
             field("Minutes between match starts").performTextReplacement("25")
             // Creation survives an Android activity recreation just like other match drafts.
             ui.activityRule.scenario.recreate()
             waitText("Create schedule")
             field("Minutes between match starts").assertTextContains("25")
+            ui.waitUntil(20_000){runCatching{ui.onNodeWithText("Create schedule").assertIsEnabled()}.isSuccess}
+            val label=LocalDate.now(ZoneId.of("Asia/Dhaka")).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy"))
+            field("Match date: $label").assertExists()
+            capture("single-date-form.png")
+            field("Release date: $label").assertExists()
+            capture("single-date-release.png")
             ui.onNodeWithText("Create schedule").performClick()
             waitText("Schedules");waitText(title)
             val query=session.db.collection("matchSchedules").whereEqualTo("template.title",title).limit(10)
             val saved=Tasks.await(query.get(Source.SERVER),20,TimeUnit.SECONDS).documents.single()
+            assertEquals(saved.getString("dateFrom"),saved.getString("dateTo"))
+            assertEquals(LocalDate.now(ZoneId.of("Asia/Dhaka")).toString(),saved.getString("releaseDate"))
             assertEquals(25L,saved.getLong("delayMinutes"));assertEquals(listOf(5000L),saved.get("prizes"))
             assertEquals("solo",(saved.get("template") as Map<*,*>)["image"])
             assertEquals("completed",saved.getString("state"))
@@ -85,6 +99,10 @@ class MatchSchedulesUiTest {
         }}
         ui.onNodeWithText("শুরুর সময়: 9:00 AM").performScrollTo().assertIsDisplayed()
         ui.onNodeWithText("ম্যাচ শুরুর ব্যবধান (মিনিট)").performScrollTo().performTextReplacement("25")
-        ui.onNodeWithText("তারিখসীমা · দুই তারিখসহ").performScrollTo().assertIsDisplayed()
+        val label=LocalDate.parse(today).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy"))
+        ui.onNodeWithText("ম্যাচের তারিখ: $label").performScrollTo().assertIsDisplayed()
+        ui.onNodeWithText("প্রকাশের তারিখ: $label").performScrollTo().assertIsDisplayed()
+        ui.onNodeWithText("তারিখসীমা · দুই তারিখসহ").assertDoesNotExist()
+        capture("single-date-bangla-large.png")
     }
 }

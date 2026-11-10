@@ -58,7 +58,7 @@ internal class AdminMatchScheduler(private val session:AdminSession) {
             val last=progress.getString("lastMatch")?.takeIf{it.isNotEmpty()}
             val previous=last?.let{tx.get(db.document("matches/$it"))}
             val lastRun=if(last!=null)tx.get(ref.collection("runs").document(sequence.toString()))else null
-            val timing=MatchScheduleTiming(schedule.getString("dateFrom")!!,schedule.getString("dateTo")!!,schedule.getLong("fromMinute")!!.toInt(),schedule.getLong("toMinute")!!.toInt(),schedule.getLong("delayMinutes")!!.toInt())
+            val timing=MatchScheduleTiming(schedule.getString("dateFrom")!!,schedule.getString("dateTo")!!,schedule.getLong("fromMinute")!!.toInt(),schedule.getLong("toMinute")!!.toInt(),schedule.getLong("delayMinutes")!!.toInt(),schedule.getString("releaseDate"))
             timing.validate()
             fun update(phase:String,nextAt:Timestamp?=null,error:String="") {
                 if(progress.getString("phase")!=phase||progress.getTimestamp("nextAt")!=nextAt||progress.getString("error")!=error)
@@ -69,6 +69,11 @@ internal class AdminMatchScheduler(private val session:AdminSession) {
                 tx.update(ref,mapOf("state" to "completed","revision" to revision,"updatedAt" to FieldValue.serverTimestamp(),"updatedBy" to actor))
                 tx.set(db.document("auditRecords/schedule_${id}_$revision"),mapOf("action" to "saveMatchSchedule","path" to ref.path,"actor" to actor,"at" to FieldValue.serverTimestamp()))
                 update("completed")
+            }
+            val releaseAt=timing.releaseAt()
+            if(releaseAt!=null&&now<releaseAt) {
+                update("queued",Timestamp(java.util.Date(releaseAt)))
+                return@runTransaction false
             }
             // Finish a draft left by an older app before generating the remaining slots.
             if(last!=null&&previous?.getString("status")=="draft") {
@@ -83,12 +88,13 @@ internal class AdminMatchScheduler(private val session:AdminSession) {
                 update("blocked",error="The current generated match was deleted. Stop this schedule and review its history.")
                 return@runTransaction false
             }
-            // Anchor to creation time, so interrupted generation resumes the same fixed slots.
-            val earliest=maxOf(dayStart,schedule.getTimestamp("createdAt")!!.toDate().time,
+            // New single-day schedules release the whole batch, skipping starts already past on recovery.
+            // Previously saved ranges keep their daily generation behavior.
+            val earliest=maxOf(if(releaseAt!=null)now else dayStart,schedule.getTimestamp("createdAt")!!.toDate().time,
                 ((lastRun?.getTimestamp("startsAt")?:previous?.getTimestamp("startsAt"))?.toDate()?.time?.plus(1))?:Long.MIN_VALUE)
             val due=timing.next(earliest)
             if(due==null){complete();return@runTransaction false}
-            if(due>=tomorrow){update("queued",Timestamp(java.util.Date(java.time.Instant.ofEpochMilli(due).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli())));return@runTransaction false}
+            if(releaseAt==null&&due>=tomorrow){update("queued",Timestamp(java.util.Date(java.time.Instant.ofEpochMilli(due).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli())));return@runTransaction false}
             val next=sequence+1
             val match=db.document("matches/schedule_${id}_$next")
             val run=ref.collection("runs").document(next.toString())

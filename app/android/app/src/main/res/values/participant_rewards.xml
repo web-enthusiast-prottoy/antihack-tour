@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="participant_reward_0">Winners</string>
+    <string name="participant_reward_1">Player kills</string>
+    <string name="participant_reward_2">Enter whole kill counts from 0 to 10000.</string>
+    <string name="participant_reward_3">Kill rewards are already finalized. Refresh the results.</string>
+    <string name="participant_reward_4">The kill draft changed. Refresh and review it again.</string>
+    <string name="participant_reward_5">The match reward changed. Refresh and review it again.</string>
+    <string name="participant_reward_6">Previously credited kills cannot be reduced.</string>
+    <string name="participant_reward_7">Kill draft saved. No wallet funds were credited.</string>
+    <string name="participant_reward_8">Kill rewards finalized.</string>
+    <string name="participant_reward_9">Placement prize credited.</string>
+    <string name="participant_reward_10">Retry the pending legacy credit before entering kills.</string>
+    <string name="participant_reward_11">This placement or participant already has a winner.</string>
+    <string name="participant_reward_12">Enter a reason for the additional kill credit.</string>
+    <string name="participant_reward_13">Select winners here. Enter everyone’s kill rewards in Player kills.</string>
+    <string name="participant_reward_14">Crediting rewards does not change match status.</string>
+    <string name="participant_reward_15">Unset kills count as 0.</string>
+    <string name="participant_reward_16">Search game name or Free Fire UID</string>
+    <string name="participant_reward_17">Some game IDs could not load. Refresh to try again.</string>
+    <string name="participant_reward_18">Finalized kill results</string>
+    <string name="participant_reward_19">Previously credited kills</string>
+    <string name="participant_reward_20">Hide team players</string>
+    <string name="participant_reward_21">Enter team player kills</string>
+    <string name="participant_reward_22">Team kills</string>
+    <string name="participant_reward_23">Kill reward credited</string>
+    <string name="participant_reward_24">Kill reward</string>
+    <string name="participant_reward_25">Paid to registering account.</string>
+    <string name="participant_reward_26">Save draft</string>
+    <string name="participant_reward_27">Review kill credits</string>
+    <string name="participant_reward_28">Placement reward</string>
+    <string name="participant_reward_29">Placement prize only. Kill rewards are credited from Player kills.</string>
+    <string name="participant_reward_30">Unset kills count as 0. Confirming finalizes every listed participant.</string>
+    <string name="participant_reward_31">Previously paid rewards are excluded.</string>
+    <string name="participant_reward_32">New wallet credits</string>
+    <string name="participant_reward_33">Reason for additional kill credit</string>
+    <string name="participant_reward_34">Confirm and credit</string>
+    <string name="participant_reward_35">Retry pending credits</string>
+    <string name="participant_reward_36">Back to editing</string>
+    <string name="participant_reward_37">Placement not recorded</string>
+    <string name="participant_reward_38">Kill rewards pending</string>
+    <string name="participant_reward_reload">Reload saved draft</string>
+    <string name="participant_reward_credited">Credited</string>
+</resources>

@@ -122,6 +122,7 @@ Match lifecycle: draft → open → registration closed → live → results und
 - Validate roster size, match state, capacity, sufficient eligible funds, and duplicate entries.
 - Only confirmed participants can read released room credentials. Store credentials separately from public match documents. Enforce release time and membership in rules, not only UI.
 - Results are entered and checked by staff. Publication and settlement are distinct, traceable actions. Duplicate settlement must not pay twice. Player result history should show placement, kills, match ID, and prize alongside match metadata; the app may show the player's own results and all published results, but never reveal unpublished results.
+- Owner-approved result entry (8 November 2026): keep placement winners and all-participant kill entry separate. Unset kills are zero. Review and credit kill rewards in batches, allow either reward order, preserve earlier combined payments, and never pay the same component twice. Team member counts pay the registering account. Public results show the component breakdown without an invented placement.
 - Maintain deposit balance, winnings, bonus restrictions, and pending withdrawal reserves explicitly.
 - Withdrawals initially use a manual queue: request → reserve eligible funds → admin review → manual payout → record verified payout reference → complete. The player form collects the configured payout method and destination account/number, shows the configured minimum and processing expectations, and requires confirmation of the destination before submission. Show the user's pending withdrawal requests and clear instructions; do not promise a fixed service time until the operator sets one. A rejected request releases its reserve once. An uncertain payout stays pending until reconciled.
 - Wallet activity is a dated, paginated ledger with readable type, signed amount, related match/payment/withdrawal reference, and state (for example pending, completed, rejected, or reversed). Recent activity links to the full history. Include entry fees, prizes, deposits, withdrawals, refunds, bonuses, adjustments, and any later-approved transfers as distinct ledger types. A balance summary is derived/reconciled against ledger records; never treat a displayed total as the accounting source of truth.
@@ -389,3 +390,13 @@ The owner explicitly requested live wallet connection. Added direct Firestore tr
 Firebase project arena-ff-34506 already has a free-tier default database and an admin role. The owner completed Firebase CLI sign-in. Existing rules were backed up, all 59 security/transaction checks passed, and tested rules were deployed. Live verification confirmed the deployed source hash, email/password sign-up, authenticated receiving-number and wallet access, denial of player balance forgery and cleanup of the temporary auth account. No fictitious deposit was credited in production. Current evidence: app/verification/live-wallet/REVIEW.md.
 
 The connected APK is app/releases/arena-live.apk; the local APK remains isolated test mode. This connects manual deposits and wallet credit, not automatic bKash verification, withdrawals, refunds or paid-match confirmation. Those remaining features stay tracked separately.
+
+
+## Single-date scheduling — 10 November 2026
+
+Owner requested one match date and a separate date-only release at Bangladesh midnight. The local admin form and scheduler now support releasing an entire future match day's batch in advance, retain existing saved ranges, and enforce release/date/interval limits in matching rules. Implementation and operating details: `app/MATCH-SCHEDULING.md`. Verification and rollout status: `app/verification/single-date-schedules/REVIEW.md`. No live rule deployment, publication, billing or credentials are part of this change.
+
+
+## Single-date schedules — live admin delivery, 10 November 2026
+
+Owner requested the signed live APK and explicitly approved scheduling-rule deployment. Admin 1.0.15 / code 27 is built with the existing production signing identity; debug/release builds, all 70 unit tests per variant and lint passed. The scheduling-only live rule diff was deployed and read-back verified. No real player data, financial transaction, operating setting, billing or external APK publication changed. Evidence: `app/verification/single-date-schedules-live/REVIEW.md`.

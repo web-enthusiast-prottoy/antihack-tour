@@ -1,3 +1,9 @@
+# Single-date schedules — 10 November 2026
+
+Signed [Admin 1.0.15 / code 27](releases/antihack-admin-1.0.15.apk) replaces date-range creation with one Match date and a separate Release date at midnight Bangladesh time. A release before match day opens advance registration. Install over the existing admin app and update all staff phones. Keep an authorized admin app online for release.
+
+The owner-approved scheduling-only Firestore rules are deployed and read-back verified. Debug/release builds, 70 unit tests per variant, lint and APK/signature/configuration checks passed. Existing production signing identity is retained; no live player data, financial transaction, settings, indexes or billing were changed. [Verification and rollback](verification/single-date-schedules-live/REVIEW.md).
+
 # Update detection repair — 9 November 2026
 
 Player **1.0.10 / code 22** adds GitHub API release discovery, preserves the download-manifest fallback, and retries failed checks after one minute with bounded backoff. The publisher includes update metadata in the release API response. Existing 1.0.8 installations affected by a failing download endpoint need one manual upgrade, keeping their current app installed. This update retains 1.0.9 match/history behavior and requires no production backend or financial changes.

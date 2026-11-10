@@ -2,6 +2,8 @@ package bd.arena.prototype
 
 import androidx.compose.animation.togetherWith
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -48,19 +50,48 @@ private val Foreground = Color(0xFFF1F3ED)
 private val Border = Color(0xFF6B786D)
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        startAnnouncementChecks()
+    }
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+        if(requestCode==901)startAnnouncementChecks()
+    }
+    private fun startAnnouncementChecks() {
+        if(AnnouncementPolling.schedule(this))lifecycleScope.launch {
+            try {AnnouncementPolling.check(this@MainActivity)}
+            catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}
+            catch(_:Exception){android.util.Log.w("Announcements","Announcement check unavailable; will retry.")}
+        }
+    }
+    private var announcementRequest by mutableIntStateOf(0)
+    override fun onNewIntent(intent:android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if(intent.getBooleanExtra(announcementIntent,false)){announcementRequest++;intent.removeExtra(announcementIntent)}
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if(intent.getBooleanExtra(announcementIntent,false)){announcementRequest++;intent.removeExtra(announcementIntent)}
+        if(BuildConfig.NOTICE_BACKEND=="live"&&android.os.Build.VERSION.SDK_INT>=33) {
+            val preferences=getSharedPreferences("announcement-delivery",0)
+            if(!preferences.getBoolean("permissionAsked",false)) {
+                preferences.edit().putBoolean("permissionAsked",true).apply()
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),901)
+            }
+        }
         setContent {
             MaterialTheme(shapes=Shapes(small=RoundedCornerShape(8.dp),medium=RoundedCornerShape(16.dp),large=RoundedCornerShape(20.dp),extraLarge=RoundedCornerShape(24.dp)),colorScheme = darkColorScheme(primary = Accent, onPrimary = Background,
                 background = Background, surface = Surface, onSurface = Foreground,
                 onBackground = Foreground, onSurfaceVariant = Muted, outline = Border,
-                secondaryContainer = Surface, onSecondaryContainer = Accent, surfaceVariant = Color(0xFF273029), outlineVariant=Color(0xFF364239))) { Surface(Modifier.fillMaxSize(),color=Background) { AntihackTourApp() } }
+                secondaryContainer = Surface, onSecondaryContainer = Accent, surfaceVariant = Color(0xFF273029), outlineVariant=Color(0xFF364239))) { Surface(Modifier.fillMaxSize(),color=Background) { AntihackTourApp(announcementRequest) } }
         }
     }
 }
 
 @Composable
-private fun AntihackTourApp() {
+private fun AntihackTourApp(announcementRequest:Int) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings",0) }
     var bangla by remember { mutableStateOf(prefs.getBoolean("bangla",false)) }
@@ -69,7 +100,7 @@ private fun AntihackTourApp() {
     DisposableEffect(session) { onDispose { session.close() } }
     LocalizedTypography(bangla) {
         val changeLanguage: (Boolean)->Unit = { bangla=it;prefs.edit().putBoolean("bangla",it).apply() }
-        PlayerApp(session,bangla,changeLanguage)
+        PlayerApp(session,bangla,changeLanguage,announcementRequest)
         PlayerUpdateNotice(bangla)
     }
 }

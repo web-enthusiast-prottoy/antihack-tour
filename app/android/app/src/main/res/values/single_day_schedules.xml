@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="single_schedule_match_date">Match date</string>
+    <string name="single_schedule_release_date">Release date</string>
+    <string name="single_schedule_times">Match times · Bangladesh time</string>
+    <string name="single_schedule_slots">Matches run only on the match date, spaced by this interval. The end time is included when it falls on the interval.</string>
+    <string name="single_schedule_release_help">All matches open for registration from 12:00 AM on the release date, Bangladesh time. If that date has started, they open now. Keep the admin app signed in and online; past start times are skipped.</string>
+    <string name="single_schedule_online">Matches are released together from midnight on the release date while the admin app is online. Reopen the app if Android stops it.</string>
+    <string name="single_schedule_creating">Creating matches</string>
+    <string name="single_schedule_waiting">Waiting for release date</string>
+    <string name="single_schedule_next">Scheduled release</string>
+    <string name="single_schedule_one_date">Choose one match date.</string>
+    <string name="single_schedule_release_error">Release date must be on or before the match date.</string>
+    <string name="single_schedule_enable">Create matches for one day</string>
+    <string name="single_schedule_enable_help">Turn this on to create multiple matches on one date.</string>
+</resources>

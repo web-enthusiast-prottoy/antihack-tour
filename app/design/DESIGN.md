@@ -151,6 +151,20 @@ Scheduling uses minutes between fixed match starts. Saving creates today's remai
 
 Paid-entry review explains deposit-first charging followed by available winnings. Join eligibility uses both balances, excludes withdrawal reserves and waits for the current wallet to load. Wallet explains that only winnings can be withdrawn. Cancellation refunds restore the original funding sources. English/Bangla copy follows the existing native controls and layout.
 
+
+## Participant kill rewards — 8 November 2026
+
+Results now separates Winners from Player kills. Winners retains prize-position cards and the confirmed-participant picker; its Save and credit action pays only the placement amount. Player kills lists every confirmed entry, supports game-name/Free Fire UID/account search, direct numeric entry, team-member counts, private server drafts, and a batch review before crediting. The owner's follow-up overrides the earlier proposal: unset or empty counts are zero and are finalized as zero when confirming the batch. Native lists scroll independently of the fixed draft/review actions, and state is saved across match-section changes.
+
+Placement and kills have separate immutable credit keys. Either may be paid first, and the public result aggregates the two components without fabricating a finishing position for non-winners. Existing combined credits remain immutable; a documented supplemental kill credit adds only the unpaid amount. A legacy team total is kept as an aggregate rather than inventing member-level history. New team counts sum into the registering account's reward. No match status changes as a side effect of paying rewards. English and Bangla use existing theme tokens and native accessible controls.
+
+Verification and rollout limitations are recorded in verification/participant-kills/REVIEW.md. No live rules or app publication is part of this change.
+
 ## Player match history — 9 November 2026
 
 Public browsing hides a match more than five minutes after its scheduled start. Home remains categories/announcements. Matches → Results defaults to My results for signed-in users: confirmed past participation appears newest first, with Results pending until a public score exists. Publication updates that same match row with the existing placement/kills/reward details. Search covers ID/title; saved history is labelled and errors offer retry. Keep existing My Matches room access and the separate All published view. English/Bangla copy uses the established native cards and semantic theme colors.
+
+
+## Single-date schedules — 10 November 2026
+
+Scheduling replaces First/Last date with one Match date and a separate Release date, using the existing native calendar dialogs. The selected From/Until times apply only to the match date. Release has no time input: helper text states 12:00 AM Bangladesh time, online-admin requirements and late-start skipping. Release after the match date shows an inline error and blocks saving. Schedule cards show both dates and a midnight release; legacy saved ranges stay readable. English/Bangla strings retain the current charcoal/sage style and saved form state. The UI UX Pro Max Compose searches returned no verified match; its general labelled-form, native control and scrolling guidance was applied.

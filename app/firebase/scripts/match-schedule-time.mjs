@@ -13,6 +13,7 @@ export function localInstant(day,minute) {
 }
 export function validateTiming(s) {
  if(s.timezone!==scheduleZone||!validDate(s.dateFrom)||!validDate(s.dateTo)||s.dateFrom>s.dateTo)throw Error('Choose a valid inclusive date range.');
+ if(s.releaseDate!==undefined&&(!validDate(s.releaseDate)||s.dateFrom!==s.dateTo||s.releaseDate>s.dateFrom))throw Error('Release date must be on or before the match date.');
  if(!Number.isInteger(s.fromMinute)||!Number.isInteger(s.toMinute)||s.fromMinute<0||s.toMinute>1439||s.toMinute<=s.fromMinute)throw Error('Daily end time must be after the start time on the same day.');
  if(!Number.isInteger(s.delayMinutes)||s.delayMinutes<1||s.delayMinutes>1440)throw Error('Enter a delay between 1 and 1440 minutes.');
 }

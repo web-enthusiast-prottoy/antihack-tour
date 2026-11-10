@@ -1,0 +1,10 @@
+<resources>
+    <string name="schedule_cleanup_0">Delete expired schedules</string>
+    <string name="schedule_cleanup_1">No expired schedules to delete.</string>
+    <string name="schedule_cleanup_2">Could not load expired schedules. Reconnect and retry.</string>
+    <string name="schedule_cleanup_3">Expired schedules</string>
+    <string name="schedule_cleanup_4">Permanently delete these schedule entries? Generated matches, results, payments and audit history are retained.</string>
+    <string name="schedule_cleanup_5">Schedules deleted</string>
+    <string name="schedule_cleanup_6">Cleanup stopped. Reconnect and retry to delete the remaining expired schedules.</string>
+    <string name="schedule_cleanup_7">This schedule has not expired.</string>
+</resources>

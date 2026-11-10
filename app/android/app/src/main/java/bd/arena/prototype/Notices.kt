@@ -21,6 +21,24 @@ object Notices {
             callback(NoticeFeed(listOf(sampleNotice), loading = false))
             return {}
         }
+        val db = database(context)
+        var previous = emptyList<Notice>()
+        val registration = db.collection("notices").whereEqualTo("published", true)
+            .orderBy("updatedAt", Query.Direction.DESCENDING).limit(20)
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+                if (error != null) callback(NoticeFeed(previous, loading = false, cached = true, error = true))
+                else if (snapshot != null) {
+                    previous = snapshot.documents.mapNotNull { doc ->
+                        val title = doc.getString("title") ?: return@mapNotNull null
+                        val body = doc.getString("body") ?: return@mapNotNull null
+                        Notice(doc.id, title, body, doc.getTimestamp("updatedAt")?.toDate()?.time ?: 0, doc.getLong("revision") ?: 1)
+                    }
+                    callback(NoticeFeed(previous, loading = false, cached = snapshot.metadata.isFromCache))
+                }
+            }
+        return { registration.remove() }
+    }
+    @Synchronized internal fun database(context:Context):FirebaseFirestore {
         val app = FirebaseApp.getApps(context).find { it.name == "arena-notices" }
             ?: FirebaseApp.initializeApp(context, FirebaseOptions.Builder()
                 .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
@@ -38,21 +56,7 @@ object Notices {
             }
             configured = true
         }
-        var previous = emptyList<Notice>()
-        val registration = db.collection("notices").whereEqualTo("published", true)
-            .orderBy("updatedAt", Query.Direction.DESCENDING).limit(20)
-            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
-                if (error != null) callback(NoticeFeed(previous, loading = false, cached = true, error = true))
-                else if (snapshot != null) {
-                    previous = snapshot.documents.mapNotNull { doc ->
-                        val title = doc.getString("title") ?: return@mapNotNull null
-                        val body = doc.getString("body") ?: return@mapNotNull null
-                        Notice(doc.id, title, body, doc.getTimestamp("updatedAt")?.toDate()?.time ?: 0, doc.getLong("revision") ?: 1)
-                    }
-                    callback(NoticeFeed(previous, loading = false, cached = snapshot.metadata.isFromCache))
-                }
-            }
-        return { registration.remove() }
+        return db
     }
     private var configured = false
 }

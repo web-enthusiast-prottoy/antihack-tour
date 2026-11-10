@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="participant_reward_0">বিজয়ী</string>
+    <string name="participant_reward_1">খেলোয়াড়ের কিল</string>
+    <string name="participant_reward_2">০ থেকে ১০০০০-এর মধ্যে পূর্ণসংখ্যায় কিল লিখুন।</string>
+    <string name="participant_reward_3">কিলের পুরস্কার চূড়ান্ত হয়েছে। ফলাফল রিফ্রেশ করুন।</string>
+    <string name="participant_reward_4">কিলের খসড়া বদলেছে। রিফ্রেশ করে আবার যাচাই করুন।</string>
+    <string name="participant_reward_5">ম্যাচের পুরস্কার বদলেছে। রিফ্রেশ করে আবার যাচাই করুন।</string>
+    <string name="participant_reward_6">আগে পুরস্কার দেওয়া কিল কমানো যাবে না।</string>
+    <string name="participant_reward_7">কিলের খসড়া সংরক্ষিত হয়েছে। ওয়ালেটে টাকা যোগ হয়নি।</string>
+    <string name="participant_reward_8">কিলের পুরস্কার চূড়ান্ত হয়েছে।</string>
+    <string name="participant_reward_9">অবস্থানের পুরস্কার যোগ হয়েছে।</string>
+    <string name="participant_reward_10">কিল দেওয়ার আগে আগের অপেক্ষমাণ পুরস্কার আবার যোগ করার চেষ্টা করুন।</string>
+    <string name="participant_reward_11">এই অবস্থান বা অংশগ্রহণকারীর বিজয়ী আগে নির্ধারিত হয়েছে।</string>
+    <string name="participant_reward_12">অতিরিক্ত কিলের পুরস্কার দেওয়ার কারণ লিখুন।</string>
+    <string name="participant_reward_13">এখানে বিজয়ী বেছে নিন। সবার কিলের পুরস্কার খেলোয়াড়ের কিল অংশে দিন।</string>
+    <string name="participant_reward_14">পুরস্কার যোগ করলে ম্যাচের অবস্থা বদলায় না।</string>
+    <string name="participant_reward_15">কিল না দিলে ০ ধরা হবে।</string>
+    <string name="participant_reward_16">গেমের নাম বা Free Fire UID খুঁজুন</string>
+    <string name="participant_reward_17">কিছু গেম আইডি লোড হয়নি। আবার রিফ্রেশ করুন।</string>
+    <string name="participant_reward_18">চূড়ান্ত কিলের ফলাফল</string>
+    <string name="participant_reward_19">আগে পুরস্কার দেওয়া কিল</string>
+    <string name="participant_reward_20">দলের খেলোয়াড় লুকান</string>
+    <string name="participant_reward_21">দলের খেলোয়াড়দের কিল দিন</string>
+    <string name="participant_reward_22">দলের কিল</string>
+    <string name="participant_reward_23">যোগ হওয়া কিলের পুরস্কার</string>
+    <string name="participant_reward_24">কিলের পুরস্কার</string>
+    <string name="participant_reward_25">নিবন্ধনকারী অ্যাকাউন্টে পুরস্কার যোগ হবে।</string>
+    <string name="participant_reward_26">খসড়া সংরক্ষণ</string>
+    <string name="participant_reward_27">কিলের পুরস্কার যাচাই</string>
+    <string name="participant_reward_28">অবস্থানের পুরস্কার</string>
+    <string name="participant_reward_29">শুধু অবস্থানের পুরস্কার। কিলের পুরস্কার খেলোয়াড়ের কিল অংশ থেকে যোগ হবে।</string>
+    <string name="participant_reward_30">কিল না দিলে ০ ধরা হবে। নিশ্চিত করলে তালিকার সবার ফলাফল চূড়ান্ত হবে।</string>
+    <string name="participant_reward_31">আগে দেওয়া পুরস্কার বাদ দেওয়া হয়েছে।</string>
+    <string name="participant_reward_32">ওয়ালেটে নতুন যোগ হবে</string>
+    <string name="participant_reward_33">অতিরিক্ত কিলের পুরস্কারের কারণ</string>
+    <string name="participant_reward_34">নিশ্চিত করে পুরস্কার দিন</string>
+    <string name="participant_reward_35">অপেক্ষমাণ পুরস্কার আবার দিন</string>
+    <string name="participant_reward_36">সম্পাদনায় ফিরুন</string>
+    <string name="participant_reward_37">অবস্থান দেওয়া হয়নি</string>
+    <string name="participant_reward_38">কিলের পুরস্কার অপেক্ষমাণ</string>
+    <string name="participant_reward_reload">সংরক্ষিত খসড়া আবার লোড করুন</string>
+    <string name="participant_reward_credited">পুরস্কার যোগ হয়েছে</string>
+</resources>

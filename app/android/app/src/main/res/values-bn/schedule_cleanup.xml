@@ -1,0 +1,10 @@
+<resources>
+    <string name="schedule_cleanup_0">মেয়াদ শেষ হওয়া সময়সূচি মুছুন</string>
+    <string name="schedule_cleanup_1">মুছে ফেলার মতো মেয়াদ শেষ হওয়া সময়সূচি নেই।</string>
+    <string name="schedule_cleanup_2">মেয়াদ শেষ হওয়া সময়সূচি লোড হয়নি। সংযোগ দিয়ে আবার চেষ্টা করুন।</string>
+    <string name="schedule_cleanup_3">মেয়াদ শেষ হওয়া সময়সূচি</string>
+    <string name="schedule_cleanup_4">এই সময়সূচিগুলো স্থায়ীভাবে মুছবেন? তৈরি করা ম্যাচ, ফলাফল, পেমেন্ট ও অডিট ইতিহাস সংরক্ষিত থাকবে।</string>
+    <string name="schedule_cleanup_5">সময়সূচি মোছা হয়েছে</string>
+    <string name="schedule_cleanup_6">মোছা বন্ধ হয়েছে। সংযোগ দিয়ে বাকি মেয়াদ শেষ হওয়া সময়সূচি মুছতে আবার চেষ্টা করুন।</string>
+    <string name="schedule_cleanup_7">এই সময়সূচির মেয়াদ এখনো শেষ হয়নি।</string>
+</resources>

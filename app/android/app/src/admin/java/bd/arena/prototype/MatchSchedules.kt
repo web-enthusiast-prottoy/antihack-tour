@@ -4,14 +4,20 @@ import com.google.firebase.firestore.*
 import java.time.LocalDate
 import java.time.ZoneId
 
-internal data class MatchScheduleTiming(val dateFrom:String,val dateTo:String,val fromMinute:Int,val toMinute:Int,val delayMinutes:Int) {
+internal data class MatchScheduleTiming(val dateFrom:String,val dateTo:String,val fromMinute:Int,val toMinute:Int,val delayMinutes:Int,val releaseDate:String?=null) {
+    fun releaseAt():Long? = releaseDate?.let{LocalDate.parse(it).atStartOfDay(ZoneId.of("Asia/Dhaka")).toInstant().toEpochMilli()}
+    fun expired(now:Long):Boolean = now>LocalDate.parse(dateTo).atStartOfDay(ZoneId.of("Asia/Dhaka")).plusMinutes(toMinute.toLong()).toInstant().toEpochMilli()
     fun validate() {
         val from=LocalDate.parse(dateFrom);val to=LocalDate.parse(dateTo)
         require(from<=to){"Choose a valid inclusive date range."}
+        if(releaseDate!=null) {
+            require(from==to){"Choose one match date."}
+            require(LocalDate.parse(releaseDate)<=from){"Release date must be on or before the match date."}
+        }
         require(fromMinute in 0..1439&&toMinute in 0..1439&&toMinute>fromMinute){"Daily end time must be after the start time on the same day."}
         require(delayMinutes in 1..1440){"Enter a delay between 1 and 1440 minutes."}
     }
-    fun fields():Map<String,Any> = mapOf("dateFrom" to dateFrom,"dateTo" to dateTo,"fromMinute" to fromMinute.toLong(),"toMinute" to toMinute.toLong(),"delayMinutes" to delayMinutes.toLong(),"timezone" to "Asia/Dhaka")
+    fun fields():Map<String,Any> = mapOf("dateFrom" to dateFrom,"dateTo" to dateTo,"fromMinute" to fromMinute.toLong(),"toMinute" to toMinute.toLong(),"delayMinutes" to delayMinutes.toLong(),"timezone" to "Asia/Dhaka")+(releaseDate?.let{mapOf("releaseDate" to it)}?:emptyMap())
     fun next(earliest:Long):Long? {
         validate()
         val zone=ZoneId.of("Asia/Dhaka")
@@ -33,6 +39,32 @@ internal data class MatchScheduleTiming(val dateFrom:String,val dateTo:String,va
 
 internal val scheduleTemplateFields=setOf("title","description","image","mode","map","capacity","entryPaisa","prizePaisa","perKillPaisa","rules","cancellationTerms","categoryId","artworkId")
 internal class MatchSchedules(private val session:AdminSession) {
+    suspend fun expiredSchedules():List<DocumentSnapshot> {
+        check(session.owner){"Owner access required."}
+        val records=mutableListOf<DocumentSnapshot>()
+        var cursor:DocumentSnapshot?=null
+        do {
+            var query:Query=session.db.collection("matchSchedules").orderBy(FieldPath.documentId()).limit(100)
+            cursor?.let{query=query.startAfter(it)}
+            val page=query.get(Source.SERVER).scheduleAwait().documents
+            records+=page.filter{it.scheduleExpired(System.currentTimeMillis())}
+            cursor=page.lastOrNull()
+        }while(page.size==100)
+        return records
+    }
+    suspend fun deleteExpired(record:DocumentSnapshot) {
+        val actor=checkNotNull(session.uid)
+        check(session.owner){"Owner access required."}
+        session.db.runTransaction{tx->
+            val current=tx.get(record.reference)
+            if(current.exists()) {
+                require(current.scheduleExpired(System.currentTimeMillis())){"This schedule has not expired."}
+                require(current.data==record.data){"The schedule changed. Refresh before trying again."}
+                tx.delete(record.reference)
+                tx.set(session.db.document("auditRecords/deleteMatchSchedule_${record.id}"),mapOf("action" to "deleteMatchSchedule","path" to record.reference.path,"actor" to actor,"at" to FieldValue.serverTimestamp()))
+            }
+        }.scheduleAwait()
+    }
     fun create(id:String,details:Map<String,Any>,prizes:List<Long>,timing:MatchScheduleTiming,artwork:ArtworkSelection,done:(Exception?)->Unit) {
         val actor=session.uid?:return
         require(session.allowed){"Staff access required."}
@@ -71,3 +103,7 @@ internal class MatchSchedules(private val session:AdminSession) {
         }.addOnCompleteListener{if(session.uid==actor&&session.allowed)done(it.exception)}
     }
 }
+
+private fun DocumentSnapshot.scheduleExpired(now:Long):Boolean = runCatching {
+    MatchScheduleTiming(getString("dateFrom")!!,getString("dateTo")!!,getLong("fromMinute")!!.toInt(),getLong("toMinute")!!.toInt(),getLong("delayMinutes")!!.toInt()).expired(now)
+}.getOrDefault(false)

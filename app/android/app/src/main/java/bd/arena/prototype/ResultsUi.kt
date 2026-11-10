@@ -85,7 +85,12 @@ private fun PublishedResultCard(row:com.google.firebase.firestore.DocumentSnapsh
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             Text(row.getString("username").orEmpty(),style=MaterialTheme.typography.titleMedium)
         }
-        FlowRow(horizontalArrangement=Arrangement.spacedBy(16.dp)) {Text(t("Placement")+": #${row.getLong("placement")} ");Text(t("Kills")+": ${row.getLong("kills")}")}
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(16.dp)) {Text(if((row.getLong("placement")?:0)>0)t("Placement")+": #${row.getLong("placement")}" else t("Placement not recorded"));Text(t("Kills")+": ${row.getLong("kills")}")}
+        if(row.getLong("rewardVersion")==2L) {
+            LabeledValue(t("Placement reward"),money(row.getLong("placementPaisa")?:0))
+            LabeledValue(t("Kill reward credited"),money(row.getLong("killPaisa")?:0))
+            if(row.getBoolean("killFinalized")!=true)Text(t("Kill rewards pending"),style=MaterialTheme.typography.bodySmall)
+        }
         Text(t("Announced award")+": "+money(row.getLong("awardPaisa")?:0),color=MaterialTheme.colorScheme.primary)
         Text(if(row.getString("settlementStatus")=="credited")t("Credited to winnings")+": "+money(row.getLong("creditedPaisa")?:0) else t(if(row.getString("settlementStatus")=="pending")"Not credited · awaiting settlement" else "No prize credit applies"),style=MaterialTheme.typography.bodySmall)
     }}

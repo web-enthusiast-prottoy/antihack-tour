@@ -28,11 +28,11 @@ class OnlineMatchSchedulerTest {
         ui.waitUntil(20_000){session.allowed}
         return session
     }
-    private fun create(session:AdminSession):String {
+    private fun create(session:AdminSession,releaseDate:String?=null):String {
         val id=session.db.collection("matchSchedules").document().id
         val details=mapOf<String,Any>("title" to "Sample daily batch $id","description" to "Local sample only","image" to "solo","mode" to "solo","map" to "Bermuda","capacity" to 48L,"entryPaisa" to 0L,"prizePaisa" to 10000L,"perKillPaisa" to 0L,"rules" to "Sample","cancellationTerms" to "Sample","categoryId" to "","artworkId" to "")
         val done=CompletableFuture<Exception?>()
-        ui.runOnUiThread{MatchSchedules(session).create(id,details,listOf(5000L,2500L),MatchScheduleTiming(firstDay.toString(),firstDay.plusDays(1).toString(),540,1140,20),ArtworkSelection()){done.complete(it)}}
+        ui.runOnUiThread{MatchSchedules(session).create(id,details,listOf(5000L,2500L),MatchScheduleTiming(firstDay.toString(),(if(releaseDate==null)firstDay.plusDays(1)else firstDay).toString(),540,1140,20,releaseDate),ArtworkSelection()){done.complete(it)}}
         assertNull(done.get(20,TimeUnit.SECONDS));return id
     }
     private fun progress(session:AdminSession,id:String)=await(session.db.document("matchScheduleProgress/$id").get(Source.SERVER))
@@ -75,6 +75,45 @@ class OnlineMatchSchedulerTest {
             advance(session,id,midnight(firstDay.plusDays(1)))
             assertEquals(62L,progress(session,id).getLong("sequence"))
             assertEquals("completed",await(session.db.document("matchSchedules/$id").get(Source.SERVER)).getString("state"))
+        }finally{cleanup(session,id)}
+    }
+    @Test fun releaseDateCreatesTheEntireNextDayBatchImmediatelyAndOnlyOnce() {
+        val session=session();val id=create(session,LocalDate.now(zone).toString())
+        try {
+            runBlocking{withTimeout(90_000){listOf(async{AdminMatchScheduler(session).advance(id)},async{AdminMatchScheduler(session).advance(id)}).awaitAll()}}
+            assertEquals(31L,progress(session,id).getLong("sequence"))
+            assertEquals("completed",progress(session,id).getString("phase"))
+            assertEquals("completed",await(session.db.document("matchSchedules/$id").get(Source.SERVER)).getString("state"))
+            val runs=await(session.db.collection("matchSchedules/$id/runs").orderBy("sequence").limit(100).get(Source.SERVER)).documents
+            assertEquals(31,runs.size)
+            runs.forEachIndexed{index,run->
+                val match=await(session.db.document("matches/${run.getString("match")}").get(Source.SERVER))
+                assertEquals(midnight(firstDay)+(540+index*20)*60_000L,match.getTimestamp("startsAt")!!.toDate().time)
+                assertEquals("open",match.getString("status"))
+            }
+            advance(session,id,midnight(firstDay))
+            assertEquals(31L,progress(session,id).getLong("sequence"))
+        }finally{cleanup(session,id)}
+    }
+    @Test fun futureReleaseWaitsUntilMidnightBangladeshTime() {
+        val session=session();val id=create(session,firstDay.toString())
+        try {
+            advance(session,id,midnight(firstDay)-1)
+            assertEquals(0L,progress(session,id).getLong("sequence"))
+            assertEquals("queued",progress(session,id).getString("phase"))
+            assertEquals(midnight(firstDay),progress(session,id).getTimestamp("nextAt")!!.toDate().time)
+            assertTrue(await(session.db.collection("matchSchedules/$id/runs").limit(100).get(Source.SERVER)).isEmpty)
+        }finally{cleanup(session,id)}
+    }
+    @Test fun lateRecoverySkipsPastStartsInsteadOfMovingMatchesToAnotherDate() {
+        val session=session();val id=create(session,LocalDate.now(zone).toString())
+        try {
+            advance(session,id,midnight(firstDay)+601*60_000L)
+            val runs=await(session.db.collection("matchSchedules/$id/runs").orderBy("sequence").limit(100).get(Source.SERVER)).documents
+            assertEquals(27,runs.size)
+            assertEquals(midnight(firstDay)+620*60_000L,runs.first().getTimestamp("startsAt")!!.toDate().time)
+            assertEquals(midnight(firstDay)+1140*60_000L,runs.last().getTimestamp("startsAt")!!.toDate().time)
+            assertEquals("completed",progress(session,id).getString("phase"))
         }finally{cleanup(session,id)}
     }
     @Test fun competingRunnersAndPauseResumeDoNotDuplicateDailyMatches() {

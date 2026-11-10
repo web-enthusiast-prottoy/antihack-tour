@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="single_schedule_match_date">ম্যাচের তারিখ</string>
+    <string name="single_schedule_release_date">প্রকাশের তারিখ</string>
+    <string name="single_schedule_times">ম্যাচের সময় · বাংলাদেশ সময়</string>
+    <string name="single_schedule_slots">এই ব্যবধানে শুধু নির্ধারিত তারিখেই ম্যাচ হবে। ব্যবধানের সঙ্গে মিললে শেষ সময়টিও অন্তর্ভুক্ত হবে।</string>
+    <string name="single_schedule_release_help">বাংলাদেশ সময় প্রকাশের তারিখের শুরুতে রাত ১২টা থেকে সব ম্যাচে নিবন্ধন চালু হবে। তারিখটি শুরু হয়ে গেলে এখনই চালু হবে। অ্যাডমিন অ্যাপে সাইন ইন করে অনলাইনে থাকুন; পেরিয়ে যাওয়া শুরুর সময়গুলো বাদ যাবে।</string>
+    <string name="single_schedule_online">অ্যাডমিন অ্যাপ অনলাইনে থাকলে প্রকাশের তারিখের শুরুতে রাত ১২টা থেকে সব ম্যাচ একসঙ্গে প্রকাশ হবে। অ্যান্ড্রয়েড অ্যাপ বন্ধ করে দিলে আবার খুলুন।</string>
+    <string name="single_schedule_creating">ম্যাচ তৈরি হচ্ছে</string>
+    <string name="single_schedule_waiting">প্রকাশের তারিখের অপেক্ষায়</string>
+    <string name="single_schedule_next">প্রকাশের সময়</string>
+    <string name="single_schedule_one_date">ম্যাচের জন্য একটি তারিখ বেছে নিন।</string>
+    <string name="single_schedule_release_error">প্রকাশের তারিখ ম্যাচের তারিখে বা তার আগে হতে হবে।</string>
+    <string name="single_schedule_enable">এক দিনের জন্য ম্যাচ তৈরি করুন</string>
+    <string name="single_schedule_enable_help">একটি তারিখে একাধিক ম্যাচ তৈরি করতে এটি চালু করুন।</string>
+</resources>

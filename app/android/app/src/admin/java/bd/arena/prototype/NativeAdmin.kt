@@ -57,8 +57,8 @@ internal fun AdminRecords(
     var editorSection by rememberSaveable { mutableStateOf("Details") }
     var repeating by rememberSaveable {mutableStateOf(false)}
     var scheduleId by rememberSaveable {mutableStateOf(session.db.collection("matchSchedules").document().id)}
-    var dateFrom by rememberSaveable {mutableStateOf(java.time.LocalDate.now(ZoneId.of("Asia/Dhaka")).toString())}
-    var dateTo by rememberSaveable {mutableStateOf(dateFrom)}
+    var matchDate by rememberSaveable {mutableStateOf(java.time.LocalDate.now(ZoneId.of("Asia/Dhaka")).toString())}
+    var releaseDate by rememberSaveable {mutableStateOf(matchDate)}
     var fromMinute by rememberSaveable {mutableIntStateOf(540)}
     var toMinute by rememberSaveable {mutableIntStateOf(1380)}
     var delayMinutes by rememberSaveable {mutableStateOf("20")}
@@ -117,7 +117,7 @@ internal fun AdminRecords(
     fun edit(record: DocumentSnapshot?) {
         repeating=false
         scheduleId=session.db.collection("matchSchedules").document().id
-        dateFrom=java.time.LocalDate.now(ZoneId.of("Asia/Dhaka")).toString();dateTo=dateFrom
+        matchDate=java.time.LocalDate.now(ZoneId.of("Asia/Dhaka")).toString();releaseDate=matchDate
         fromMinute=540;toMinute=1380;delayMinutes="20";editorSection="Details"
         initialPrizes=emptyList()
         independentPrizeTotal=record==null||record.getBoolean("independentPrizeTotal")==true
@@ -173,7 +173,7 @@ internal fun AdminRecords(
             val prizes = if(path=="matches"&&recordId.isBlank()) initialPrizes.map { try { awardPaisa(it) } catch (_:Exception) { throw IllegalArgumentException("Enter valid taka amounts with up to two decimals.") } } else emptyList()
             if(prizes.isNotEmpty())require(prizes.size <= (data["capacity"] as Long)){"Capacity must include all saved prize positions."}
             if(path=="matches"&&recordId.isBlank()&&repeating) {
-                val timing=MatchScheduleTiming(dateFrom,dateTo,fromMinute,toMinute,delayMinutes.toIntOrNull()?:0)
+                val timing=MatchScheduleTiming(matchDate,matchDate,fromMinute,toMinute,delayMinutes.toIntOrNull()?:0,releaseDate)
                 timing.validate()
                 busy=true;error="";message=""
                 try {
@@ -342,7 +342,7 @@ internal fun AdminRecords(
                 } }
             }
             if(path=="matches"&&editorSection=="Scheduling"&&recordId.isBlank())item {
-                MatchSchedulingForm(!busy,repeating,{repeating=it},dateFrom,{dateFrom=it},dateTo,{dateTo=it},fromMinute,{fromMinute=it},toMinute,{toMinute=it},delayMinutes,{delayMinutes=it})
+                MatchSchedulingForm(!busy,repeating,{repeating=it},matchDate,{matchDate=it},releaseDate,{releaseDate=it},fromMinute,{fromMinute=it},toMinute,{toMinute=it},delayMinutes,{delayMinutes=it})
             }
             if(path=="matches"&&editorSection=="Prizes")item {
                 if(recordId.isBlank())Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -391,7 +391,7 @@ internal fun AdminRecords(
                         adminMatchTime(record)
                     ).filter { it.isNotBlank() }.joinToString(" · ")
                     AdminPage.Players -> record.getString("ffUsername")
-                    AdminPage.Results -> "#${record.getLong("placement") ?: 0} · ${money(record.getLong("awardPaisa") ?: 0)}"
+                    AdminPage.Results -> (record.getLong("placement")?.takeIf{it>0}?.let{"#$it"}?:adminText("Placement not recorded"))+" · ${money(record.getLong("awardPaisa") ?: 0)}"
                     AdminPage.Deposits, AdminPage.Withdrawals -> record.getTimestamp("createdAt")?.let(::recordTime)
                     AdminPage.Audit -> record.getTimestamp("at")?.let(::recordTime)
                     else -> null
@@ -470,6 +470,10 @@ private fun AdminRecordDetails(session:AdminSession, page: AdminPage, record: Do
                 }
                 if (page == AdminPage.Results) {
                     record.getLong("kills")?.let { LabeledValue(adminText("Kills"), it.toString()) }
+                    if(record.getLong("rewardVersion")==2L) {
+                        LabeledValue(adminText("Placement reward"),money(record.getLong("placementPaisa")?:0))
+                        LabeledValue(adminText("Kill reward credited"),money(record.getLong("killPaisa")?:0))
+                    }
                 }
                 fields.forEach { (field, label) ->
                     record.getString(field)?.takeIf { it.isNotBlank() }?.let { LabeledValue(adminText(label), it) }

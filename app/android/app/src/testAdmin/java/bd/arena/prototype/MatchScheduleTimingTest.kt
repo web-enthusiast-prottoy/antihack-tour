@@ -13,6 +13,12 @@ class MatchScheduleTimingTest {
         assertEquals(time("2026-11-15T13:00:00Z"),timing.next(time("2026-11-15T13:00:00Z")))
         assertNull(timing.next(time("2026-11-15T13:00:00.001Z")))
     }
+    @Test fun expiryWaitsUntilTheFinalBangladeshTimeWindowEnds() {
+        assertFalse(timing.expired(time("2026-11-15T12:59:59Z")))
+        assertFalse(timing.expired(time("2026-11-15T13:00:00Z")))
+        assertTrue(timing.expired(time("2026-11-15T13:00:00.001Z")))
+        assertFalse(timing.expired(time("2026-11-07T14:00:00Z")))
+    }
     @Test fun nineToSevenCreates31FixedStartsEachDay() {
         var next=timing.next(time("2026-11-06T18:00:00Z"))!!
         val starts=mutableListOf<Long>()
@@ -26,6 +32,25 @@ class MatchScheduleTimingTest {
     }
     @Test fun unalignedEndDoesNotAddAnExtraMatch() {
         assertEquals(time("2026-11-08T03:00:00Z"),timing.copy(toMinute=1139).next(time("2026-11-07T12:41:00Z")))
+    }
+    @Test fun singleMatchDateHasAll43StartsFromNineAmToElevenPm() {
+        val single=MatchScheduleTiming("2026-11-12","2026-11-12",540,1380,20,"2026-11-11")
+        single.validate()
+        assertEquals(time("2026-11-10T18:00:00Z"),single.releaseAt())
+        val starts=generateSequence(single.next(single.releaseAt()!!)){single.next(it+1)}.toList()
+        assertEquals(43,starts.size)
+        assertEquals(time("2026-11-12T03:00:00Z"),starts.first())
+        assertEquals(time("2026-11-12T17:00:00Z"),starts.last())
+        assertNull(single.next(starts.last()+1))
+    }
+    @Test fun sameDayReleaseIsMidnightBangladeshTime() {
+        val single=timing.copy(dateTo=timing.dateFrom,releaseDate=timing.dateFrom)
+        assertEquals(time("2026-11-06T18:00:00Z"),single.releaseAt())
+        assertNull(timing.releaseAt()) // Previously saved ranges keep their daily behavior.
+        for(bad in listOf(single.copy(releaseDate="2026-11-08"),single.copy(releaseDate="2026-02-30"),single.copy(dateTo="2026-11-08"))) {
+            assertTrue(runCatching{bad.validate()}.isFailure)
+        }
+        assertEquals("2026-11-07",single.fields()["releaseDate"])
     }
     @Test fun invalidDatesWindowsAndDelayAreRejected() {
         for(bad in listOf(timing.copy(dateTo="2026-11-06"),timing.copy(fromMinute=1380,toMinute=540),timing.copy(delayMinutes=0),timing.copy(dateFrom="2026-02-30"))) {

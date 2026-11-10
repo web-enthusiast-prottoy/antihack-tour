@@ -29,13 +29,15 @@ fun firebaseConfig(configFile: File, packageId: String): List<String> {
     val projectId = project["project_id"] as? String ?: ""
     val appId = info["mobilesdk_app_id"] as? String ?: ""
     val apiKey = keys.filterIsInstance<Map<*, *>>().firstOrNull()?.get("current_key") as? String ?: ""
+    val senderId = project["project_number"] as? String ?: ""
     require(projectId.isNotBlank() && !projectId.startsWith("demo-") && appId.isNotBlank() && apiKey.isNotBlank()) {
         "Live Firebase configuration is incomplete for $packageId."
     }
-    return listOf(projectId, appId, apiKey, project["storage_bucket"] as? String ?: "")
+    require(senderId.matches(Regex("[0-9]+"))) { "Firebase project number is missing for $packageId." }
+    return listOf(projectId, appId, apiKey, project["storage_bucket"] as? String ?: "", senderId)
 }
 
-val localFirebase = listOf("demo-arena", "1:1234567890:android:arena-local", "local-emulator-key", "")
+val localFirebase = listOf("demo-arena", "1:1234567890:android:arena-local", "local-emulator-key", "", "1234567890")
 val playerFirebase = if (isLive) firebaseConfig(file("google-services.json"), playerId) else localFirebase
 val adminFirebase = if (adminLive) firebaseConfig(file("src/admin/google-services.json"), adminId) else localFirebase
 require(!adminLive || adminFirebase.first() == playerFirebase.first()) { "Player and admin must use the same Firebase project." }
@@ -91,8 +93,8 @@ android {
             dimension = "audience"
             applicationId = playerId
             if (isLive) {
-                versionCode = 22
-                versionName = "1.0.10"
+                versionCode = 23
+                versionName = "1.0.11"
             }
             manifestPlaceholders["appLabel"] = if (isLive) "Antihack Tour" else "Antihack Tour Local"
             manifestPlaceholders["launcherActivity"] = ".MainActivity"
@@ -102,8 +104,8 @@ android {
             dimension = "audience"
             applicationId = adminId
             if (isLive) {
-                versionCode = 24
-                versionName = "1.0.12"
+                versionCode = 27
+                versionName = "1.0.15"
             }
             manifestPlaceholders["appLabel"] = if (isLive) "Antihack Admin" else "Antihack Admin Local"
             manifestPlaceholders["launcherActivity"] = ".AdminActivity"
@@ -111,7 +113,7 @@ android {
         }
         forEach { flavor ->
             val config = if (flavor.name == "admin") adminFirebase else playerFirebase
-            listOf("PROJECT_ID", "APP_ID", "API_KEY", "STORAGE_BUCKET").zip(config).forEach { (name, value) ->
+            listOf("PROJECT_ID", "APP_ID", "API_KEY", "STORAGE_BUCKET", "MESSAGING_SENDER_ID").zip(config).forEach { (name, value) ->
                 flavor.buildConfigField("String", "FIREBASE_$name", "\"$value\"")
             }
         }
@@ -142,6 +144,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("com.google.firebase:firebase-firestore:25.1.4")
     implementation("com.google.firebase:firebase-auth:23.0.0")
+    "playerImplementation"("com.google.firebase:firebase-messaging:24.1.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

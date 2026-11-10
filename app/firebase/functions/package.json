@@ -1,0 +1,9 @@
+{
+  "name": "antihack-announcement-sender",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "engines": {"node": "22"},
+  "scripts": {"test": "node --test announcement-message.test.mjs"},
+  "dependencies": {"firebase-admin": "14.5.0", "firebase-functions": "7.4.0"}
+}

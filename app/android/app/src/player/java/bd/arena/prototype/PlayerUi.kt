@@ -71,13 +71,14 @@ internal fun AuthScreen(session:AdminSession,bangla:Boolean,language:(Boolean)->
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->Unit) {
+internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->Unit,announcementRequest:Int=0) {
     fun t(en:String,bn:String)=LocaleStrings.get(en,if(bangla)bn else en)
     if(session.restoring) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {CircularProgressIndicator()};return }
     var tab by rememberSaveable {mutableStateOf("Home")}
     var resumeJoin by rememberSaveable {mutableStateOf(false)}
     var page by rememberSaveable {mutableStateOf<String?>(null)}
     var selected by rememberSaveable {mutableStateOf<String?>(null)}
+    LaunchedEffect(announcementRequest) {if(announcementRequest>0){tab="Notifications";page=null;selected=null}}
     if(!accountAccess(session,bangla))return
     key(session.uid) {
         val data=remember(session.uid) {PlayerData(session)}
@@ -131,7 +132,7 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
         val prefs=remember(session.uid) {context.getSharedPreferences("notice-${session.uid}",0)}
         var read by remember(prefs) {mutableStateOf(prefs.getStringSet("read",emptySet())!!.toSet())}
         fun openNotice(n:Notice) {noticeDetail=n;read=(read+n.readKey).toList().takeLast(200).toSet();prefs.edit().putStringSet("read",read).apply()}
-        DisposableEffect(noticeRetry) {val stop=Notices.listen(context){feed=it};onDispose{stop()}}
+        DisposableEffect(noticeRetry) {val stop=Notices.listen(context){feed=it;AnnouncementPolling.observe(context,it)};onDispose{stop()}}
         LaunchedEffect(session.uid) {
             if(session.uid!=null)authenticating=false
             else if(tab=="Wallet")tab="Home"
@@ -239,6 +240,9 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
                         if(screen!="Home"&&data.matchesMore)item{OutlinedButton(onClick={data.loadMoreMatches()},modifier=Modifier.fillMaxWidth()){Text(LocaleStrings.get("Load more"))}}
                     }
                     "Notifications" -> {
+                        if(BuildConfig.NOTICE_BACKEND=="live")item {TextButton(onClick={
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,context.packageName))
+                        }){Text(t("Notification settings","বিজ্ঞপ্তির সেটিংস"))}}
                         item {TextButton(onClick={read=(read+feed.notices.map{it.readKey}).toSet();prefs.edit().putStringSet("read",read).apply()}) {Text(t("Mark all read","সব পড়া হয়েছে"))}}
                         items(feed.notices,key={it.id}) {n -> NoticeCard(n,n.readKey !in read) {openNotice(n)}}
                     }
