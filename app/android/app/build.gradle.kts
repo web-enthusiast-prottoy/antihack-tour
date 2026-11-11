@@ -94,8 +94,8 @@ android {
             dimension = "audience"
             applicationId = playerId
             if (isLive) {
-                versionCode = 23
-                versionName = "1.0.11"
+                versionCode = 25
+                versionName = "1.0.13"
             }
             manifestPlaceholders["appLabel"] = if (isLive) "Antihack Tour" else "Antihack Tour Local"
             manifestPlaceholders["launcherActivity"] = ".MainActivity"
@@ -151,7 +151,6 @@ dependencies {
     testImplementation("androidx.compose.ui:ui-test-junit4")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("org.mockito:mockito-core:5.14.2")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

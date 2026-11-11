@@ -52,7 +52,9 @@ class MatchHistoryUiTest {
                 }
             }}}
             show(1f)
-            ui.onNodeWithText("Search match ID or title").performTextInput(id)
+            val search=ui.onNodeWithTag("results-search")
+            assertTrue(search.fetchSemanticsNode().boundsInRoot.top<ui.onNodeWithText("My results").fetchSemanticsNode().boundsInRoot.top)
+            search.performTextInput(id)
             waitFor{ui.onAllNodesWithText("Sample history $id").fetchSemanticsNodes().isNotEmpty()}
             ui.onNodeWithText("Results pending").assertExists();capture("pending")
             val entry=Tasks.await(session.db.document("entries/${uid}_$id").get(Source.SERVER),20,TimeUnit.SECONDS)
@@ -64,9 +66,53 @@ class MatchHistoryUiTest {
             ui.runOnUiThread{rewards.creditKills(reviewed!!,""){credited=true}}
             waitFor{credited||rewards.error.isNotEmpty()};assertEquals("",rewards.error)
             waitFor{history.published.containsKey(id)}
+            val result=ui.onNodeWithTag("result-"+history.published.getValue(id).id)
+            waitFor{runCatching{result.assertHasClickAction()}.isSuccess}
+            ui.onNodeWithText("Results pending").assertDoesNotExist()
+            result.performClick()
             waitFor{ui.onAllNodesWithText("Placement not recorded").fetchSemanticsNodes().isNotEmpty()}
-            ui.onNodeWithText("Results pending").assertDoesNotExist();capture("published")
+            capture("published")
             show(2f);waitFor{ui.onAllNodesWithText("Sample history $id").fetchSemanticsNodes().isNotEmpty()};capture("large-text")
+        } finally {ui.runOnUiThread{history.close()};session.auth.signOut();session.close()}
+    }
+
+    @Test fun deletedMatchDoesNotBreakOtherConfirmedHistory() {
+        check(BuildConfig.FIREBASE_USE_EMULATOR)
+        val session=AdminSession(ui.activity,verifyStaff=false)
+        val history=MyMatchResults(session)
+        val id="history-orphan-${System.currentTimeMillis()}"
+        fun seed(path:String,fields:Map<String,Map<String,String>>) {
+            val url=java.net.URL("http://10.0.2.2:8080/v1/projects/demo-arena/databases/(default)/documents/$path")
+            val connection=url.openConnection() as java.net.HttpURLConnection
+            try {
+                connection.requestMethod="PATCH"
+                connection.doOutput=true
+                connection.setRequestProperty("Authorization","Bearer owner")
+                connection.setRequestProperty("Content-Type","application/json")
+                connection.outputStream.use{it.write(org.json.JSONObject(mapOf("fields" to fields)).toString().toByteArray())}
+                assertEquals(200,connection.responseCode)
+            } finally {connection.disconnect()}
+        }
+        try {
+            Tasks.await(session.auth.createUserWithEmailAndPassword("$id@arena.test","PlayerLocal123!"),20,TimeUnit.SECONDS)
+            val uid=session.auth.currentUser!!.uid
+            waitFor{session.uid==uid}
+            seed("matches/$id",mapOf(
+                "status" to mapOf("stringValue" to "open"),
+                "title" to mapOf("stringValue" to "Local history fixture"),
+                "startsAt" to mapOf("timestampValue" to java.time.Instant.now().minusSeconds(360).toString())
+            ))
+            for(match in listOf(id,"$id-deleted"))seed("entries/${uid}_$match",mapOf(
+                "uid" to mapOf("stringValue" to uid),
+                "match" to mapOf("stringValue" to match),
+                "status" to mapOf("stringValue" to "confirmed")
+            ))
+            val missing=runCatching{Tasks.await(session.db.document("matches/$id-deleted").get(Source.SERVER),10,TimeUnit.SECONDS)}.exceptionOrNull()
+            assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED,(missing?.cause as? FirebaseFirestoreException)?.code)
+            ui.runOnUiThread{history.load()}
+            waitFor{history.error||!history.loading&&!history.cached}
+            assertFalse(history.error)
+            assertEquals(listOf(id),history.matches.map{it.id})
         } finally {ui.runOnUiThread{history.close()};session.auth.signOut();session.close()}
     }
 }

@@ -30,7 +30,7 @@ import org.robolectric.util.ReflectionHelpers
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk=[34],qualifiers="w360dp-h800dp-xhdpi")
+@Config(sdk=[34],qualifiers="w360dp-h800dp-xhdpi",application=ComposeTestApplication::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class HomeAuthUiTest {
     @get:Rule val ui=createAndroidComposeRule<ComponentActivity>()
