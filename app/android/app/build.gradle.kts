@@ -94,8 +94,8 @@ android {
             dimension = "audience"
             applicationId = playerId
             if (isLive) {
-                versionCode = 23
-                versionName = "1.0.11"
+                versionCode = 24
+                versionName = "1.0.12"
             }
             manifestPlaceholders["appLabel"] = if (isLive) "Antihack Tour" else "Antihack Tour Local"
             manifestPlaceholders["launcherActivity"] = ".MainActivity"
