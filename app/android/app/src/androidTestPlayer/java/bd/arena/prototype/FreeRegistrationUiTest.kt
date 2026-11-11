@@ -28,7 +28,7 @@ class FreeRegistrationUiTest {
         ui.onNode(hasScrollAction()).performScrollToNode(hasText("Device free registration"))
         ui.onNodeWithText("Device free registration").performClick()
         ui.onNodeWithText("Join match").performClick()
-        ui.onNodeWithText("Confirm roster and join").performScrollTo().performClick()
+        ui.onNodeWithTag("join-confirm").performScrollTo().performClick()
         ui.waitUntil(20_000) {ui.onAllNodesWithText("Registration confirmed.").fetchSemanticsNodes().isNotEmpty()}
         ui.onNodeWithText("OK").performClick()
         val ref=session.db.document("matches/device-free-registration")

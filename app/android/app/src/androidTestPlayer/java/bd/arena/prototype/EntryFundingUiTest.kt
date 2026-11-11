@@ -47,8 +47,8 @@ class EntryFundingUiTest {
             ui.onNodeWithContentDescription("Search match ID or title").performImeAction();waitText(title)
             ui.onNodeWithText(title).performClick();waitText("Join match")
             ui.waitUntil(20_000){runCatching{ui.onNodeWithText("Join match").assertIsEnabled()}.isSuccess}
-            ui.onNodeWithText("Join match").performClick();waitText("Confirm roster and join")
-            ui.onNodeWithText("Confirm roster and join").performScrollTo().performClick();waitText("Entry confirmed. Wallet charged once.")
+            ui.onNodeWithText("Join match").performClick();waitText("Review entry")
+            ui.onNodeWithTag("join-confirm").performScrollTo().performClick();waitText("Entry confirmed. Wallet charged once.")
             val wallet=await(session.db.document("wallets/$uid").get(Source.SERVER))
             assertEquals(0L,wallet.getLong("balance"));assertEquals(0L,wallet.getLong("winnings"));assertEquals(5000L,wallet.getLong("reservedWinnings"))
             val ledger=await(session.db.document("walletLedger/entry_${uid}_$match").get(Source.SERVER))

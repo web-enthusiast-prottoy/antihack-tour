@@ -15,6 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import com.google.firebase.firestore.*
 
 internal data class MatchCategory(val id:String,val name:String,val order:Long,val active:Boolean,val artworkId:String="")
@@ -41,13 +45,22 @@ internal fun LazyListScope.categoryTiles(session:AdminSession,categories:List<Ma
 @Composable
 private fun CategoryTileRow(session:AdminSession,pair:List<MatchCategory>,selected:String,choose:(String)->Unit) {
     Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-        pair.forEach{category->Card(onClick={choose(category.id)},modifier=Modifier.weight(1f),border=if(selected==category.id)androidx.compose.foundation.BorderStroke(2.dp,MaterialTheme.colorScheme.primary)else null) {
-            Box {
-                ArtworkImage(session,category.artworkId,if(category.name.contains("Clash",true))R.drawable.mode_squad else R.drawable.mode_solo,Modifier.fillMaxWidth().aspectRatio(1f))
-                Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent,Color.Black.copy(alpha=0.9f)))))
-                Text(category.name,Modifier.align(Alignment.BottomStart).padding(14.dp),style=MaterialTheme.typography.titleMedium,color=Color.White)
-            }
+        pair.forEach{category->CategoryTile(category,selected==category.id,Modifier.weight(1f),{choose(category.id)}){imageModifier->
+            ArtworkImage(session,category.artworkId,if(category.name.contains("Clash",true))R.drawable.mode_squad else R.drawable.mode_solo,imageModifier)
         }}
         if(pair.size==1)Spacer(Modifier.weight(1f))
+    }
+}
+
+@Composable
+internal fun CategoryTile(category:MatchCategory,selected:Boolean,modifier:Modifier=Modifier,open:()->Unit,artwork:@Composable (Modifier)->Unit) {
+    Card(onClick=open,modifier=modifier.testTag("category-${category.id}"),shape=RoundedCornerShape(20.dp),
+        border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
+        HomeEntrance {Box {
+            artwork(Modifier.fillMaxWidth().aspectRatio(0.78f))
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent,Color.Black.copy(alpha=0.9f)))))
+            Icon(painterResource(R.drawable.ic_chevron),null,Modifier.align(Alignment.TopEnd).padding(12.dp).size(18.dp),tint=Color.White)
+            Text(category.name,Modifier.align(Alignment.BottomStart).padding(14.dp),style=MaterialTheme.typography.titleMedium.copy(fontWeight=FontWeight.SemiBold),color=Color.White)
+        }}
     }
 }

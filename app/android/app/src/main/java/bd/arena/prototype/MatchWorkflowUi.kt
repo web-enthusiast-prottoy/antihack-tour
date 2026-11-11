@@ -12,10 +12,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -54,22 +61,37 @@ internal fun MatchRoomCard(session:AdminSession,match:String,confirmed:Boolean,e
         lifecycle.addObserver(observer)
         onDispose{lifecycle.removeObserver(observer);access.close()}
     }
+    MatchRoomContent(confirmed,entryStatus,access.state,show={hidden=false;access.open(match)},refresh={access.open(match)},hide={hidden=true;access.close()})
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun MatchRoomContent(confirmed:Boolean,entryStatus:String?,state:RoomState,show:()->Unit,refresh:()->Unit,hide:()->Unit) {
+    var explanation by rememberSaveable(entryStatus){mutableStateOf(false)}
     Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface,contentColor=MaterialTheme.colorScheme.onSurface)) {
         Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text(wt("Match room"),style=MaterialTheme.typography.titleLarge)
-            if(!confirmed)Text(wt(if(entryStatus=="requested")"Your entry is awaiting staff confirmation. Room details unlock after payment confirmation and room release." else "Room details are available only to confirmed participants after release."))
-            else when(val state=access.state) {
-                RoomState.Hidden->{Text(wt("Room details require a current server connection and the staff release time."));Button(onClick={hidden=false;access.open(match)}){Text(wt("Show room"))}}
+            if(!confirmed) {
+                TextButton(onClick={explanation=!explanation},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("room-access-toggle").semantics{stateDescription=wt(if(explanation)"Expanded" else "Collapsed")},contentPadding=PaddingValues(0.dp)) {
+                    Text(wt("Room access"),Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface)
+                    Text(if(explanation)"−" else "+")
+                }
+                AnimatedVisibility(explanation,enter=expandVertically(tween(180)),exit=shrinkVertically(tween(160))) {
+                    Text(wt(if(entryStatus=="requested")"Your entry is awaiting staff confirmation. Room details unlock after payment confirmation and room release." else "Room details are available only to confirmed participants after release."),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            else Text(wt("Room access"),style=MaterialTheme.typography.titleSmall)
+            if(confirmed)when(val current=state) {
+                RoomState.Hidden->{Text(wt("Room details require a current server connection and the staff release time."));Button(onClick=show){Text(wt("Show room"))}}
                 RoomState.Loading->{Text(wt("Checking room availability…"),style=MaterialTheme.typography.bodySmall);LinearProgressIndicator(Modifier.fillMaxWidth())}
-                is RoomState.Unavailable->{Text(wt(state.message));OutlinedButton(onClick={access.open(match)}){Text(wt("Refresh room"))}}
+                is RoomState.Unavailable->{Text(wt(current.message));OutlinedButton(onClick=refresh){Text(wt("Refresh room"))}}
                 is RoomState.Ready->{
                     Text(wt("Room ready"),style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
-                    RoomCredential(wt("Room ID"),state.roomId,wt("Copy room ID"))
-                    RoomCredential(wt("Room password"),state.password,wt("Copy password"))
+                    RoomCredential(wt("Room ID"),current.roomId,wt("Copy room ID"))
+                    RoomCredential(wt("Room password"),current.password,wt("Copy password"))
                     Text(wt("Use these details to enter the game room."),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     FlowRow(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                        TextButton(onClick={access.open(match)}){Text(wt("Refresh room"))}
-                        TextButton(onClick={hidden=true;access.close()}){Text(wt("Hide"))}
+                        TextButton(onClick=refresh){Text(wt("Refresh room"))}
+                        TextButton(onClick=hide){Text(wt("Hide"))}
                     }
                 }
             }

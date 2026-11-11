@@ -55,6 +55,13 @@ internal fun PrizePanel(session:AdminSession,match:String,editable:Boolean=false
         rankError="";amountError=""
         operations.savePrizePosition(match,position,value,revision){rev,total->rank="";amount="";expected=null;onSaved(rev,total)}
     }
+    if(!editable) {
+        PublicPrizeContent(rows.rows.map{PublicPrize(it.getLong("rank")?:0,it.getLong("amountPaisa")?:0)},enabled,
+            record==null&&!failed||rows.loading,record!=null&&cached||enabled&&rows.cached,failed||rows.error,
+            record?.getLong("perKillPaisa"),retry={retry++})
+        if(failed||rows.error)RegisterRefresh(true){retry++}
+        return
+    }
     Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface,contentColor=MaterialTheme.colorScheme.onSurface)) {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Text(t("Prize distribution"),style=MaterialTheme.typography.titleLarge)

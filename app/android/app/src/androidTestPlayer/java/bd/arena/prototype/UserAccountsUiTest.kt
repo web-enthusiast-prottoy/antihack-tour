@@ -33,21 +33,21 @@ class UserAccountsUiTest {
         scroll("Email"); ui.onNodeWithText("Email").performTextInput(email)
         scroll("Password"); ui.onNodeWithText("Password", substring = false).performTextInput(password)
         scroll("Confirm password"); ui.onNodeWithText("Confirm password").performTextInput("Mismatch123!")
-        scroll("Create account"); ui.onNodeWithText("Create account").performClick()
+        ui.onNodeWithTag("auth-submit").performScrollTo().performClick()
         ui.onNodeWithText("Passwords do not match.").assertExists()
         ui.onNodeWithText("Confirm password").performTextReplacement(password)
-        scroll("Create account"); ui.onNodeWithText("Create account").performClick()
+        ui.onNodeWithTag("auth-submit").performScrollTo().performClick()
         ui.waitUntil(30_000) { auth.currentUser?.email == email }
         val uid = auth.currentUser?.uid; assertNotNull(uid)
         ui.waitUntil(10_000) { ui.onAllNodesWithText("Profile").fetchSemanticsNodes().isNotEmpty() }
         ui.onNode(hasText("Profile") and hasClickAction()).performClick()
         ui.onNodeWithText("Administration").assertDoesNotExist()
-        scroll("Sign out"); ui.onNodeWithText("Sign out").performClick()
+        scroll("Sign out"); ui.onNodeWithText("Sign out").performClick();ui.onNodeWithTag("signout-confirm").performScrollTo().performClick()
         ui.waitUntil(10_000) { ui.onAllNodesWithText("Sign in / Create account").fetchSemanticsNodes().isNotEmpty() }
         scroll("Sign in / Create account"); ui.onNodeWithText("Sign in / Create account").performClick()
         scroll("Email"); ui.onNodeWithText("Email").performTextReplacement(email)
         scroll("Password"); ui.onNodeWithText("Password").performTextInput(password)
-        scroll("Sign in"); ui.onNodeWithText("Sign in").performClick()
+        ui.onNodeWithTag("auth-submit").performScrollTo().performClick()
         ui.waitUntil(30_000) { auth.currentUser?.uid == uid }
         assertEquals(uid,auth.currentUser?.uid)
         ui.onNodeWithText("Administration").assertDoesNotExist()
@@ -67,9 +67,9 @@ class UserAccountsUiTest {
         ui.waitUntil(10_000) {ui.onAllNodesWithText("Profile").fetchSemanticsNodes().isNotEmpty()}
         openSignIn()
         ui.onNode(hasText("বাংলা") and hasClickAction()).performClick()
-        ui.onNodeWithText("সাইন ইন").assertExists()
+        ui.onNodeWithTag("auth-submit").assertTextContains("সাইন ইন")
         ui.activityRule.scenario.recreate()
-        ui.onNodeWithText("সাইন ইন").assertExists()
+        ui.onNodeWithTag("auth-submit").assertTextContains("সাইন ইন")
         ui.onNode(hasText("English") and hasClickAction()).performClick()
     }
 }

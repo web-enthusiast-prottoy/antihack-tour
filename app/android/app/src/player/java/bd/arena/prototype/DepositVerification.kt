@@ -39,10 +39,10 @@ internal fun DepositVerification(session: AdminSession, id: String, until: Long,
     }
     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        CircularProgressIndicator()
-        Text(t("Verifying deposit…", "জমার তথ্য যাচাই হচ্ছে…"), style = MaterialTheme.typography.titleMedium,
+        LinearProgressIndicator(Modifier.fillMaxWidth())
+        Text(t("Verifying deposit…", "জমার তথ্য যাচাই হচ্ছে…"), style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         Text(t("Checking for a matching payment receipt. This may take up to 30 seconds. Unverified requests stay pending for admin approval.",
-            "মিলে যাওয়া পেমেন্ট রসিদ খোঁজা হচ্ছে। সর্বোচ্চ ৩০ সেকেন্ড লাগতে পারে। যাচাই না হলে অনুরোধ অ্যাডমিনের অনুমোদনের জন্য অপেক্ষায় থাকবে।"))
+            "মিলে যাওয়া পেমেন্ট রসিদ খোঁজা হচ্ছে। সর্বোচ্চ ৩০ সেকেন্ড লাগতে পারে। যাচাই না হলে অনুরোধ অ্যাডমিনের অনুমোদনের জন্য অপেক্ষায় থাকবে।"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

@@ -33,8 +33,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
-import java.text.DateFormat
-import java.util.Date
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -82,11 +80,17 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            MaterialTheme(shapes=Shapes(small=RoundedCornerShape(8.dp),medium=RoundedCornerShape(16.dp),large=RoundedCornerShape(20.dp),extraLarge=RoundedCornerShape(24.dp)),colorScheme = darkColorScheme(primary = Accent, onPrimary = Background,
-                background = Background, surface = Surface, onSurface = Foreground,
-                onBackground = Foreground, onSurfaceVariant = Muted, outline = Border,
-                secondaryContainer = Surface, onSecondaryContainer = Accent, surfaceVariant = Color(0xFF273029), outlineVariant=Color(0xFF364239))) { Surface(Modifier.fillMaxSize(),color=Background) { AntihackTourApp(announcementRequest) } }
+            PlayerTheme {AntihackTourApp(announcementRequest)}
         }
+    }
+}
+
+@Composable
+internal fun PlayerTheme(content:@Composable ()->Unit) {
+    MaterialTheme(shapes=Shapes(small=RoundedCornerShape(8.dp),medium=RoundedCornerShape(16.dp),large=RoundedCornerShape(20.dp),extraLarge=RoundedCornerShape(24.dp)),colorScheme=darkColorScheme(primary=Accent,onPrimary=Background,
+        background=Background,surface=Surface,onSurface=Foreground,onBackground=Foreground,onSurfaceVariant=Muted,outline=Border,
+        secondaryContainer=Surface,onSecondaryContainer=Accent,surfaceVariant=Color(0xFF273029),outlineVariant=Color(0xFF364239))) {
+        Surface(Modifier.fillMaxSize(),color=Background){content()}
     }
 }
 
@@ -190,62 +194,11 @@ internal fun HomeHero(bangla: Boolean) {
     }
 }
 
-private fun noticeTime(notice: Notice) = if (notice.updatedAt == 0L) "Sample announcement" else DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(notice.updatedAt))
-
 @Composable
 private fun NoticeConnection(feed: NoticeFeed, retry: () -> Unit) {
     when {
         feed.loading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Accent)
         feed.error -> Column { Secondary("Announcements couldn’t be refreshed. Saved updates may be out of date.", small = true); TextButton(onClick = retry) { Text("Try again") } }
         feed.cached -> Column { Secondary("Offline · Showing saved announcements", small = true); TextButton(onClick = retry) { Text("Refresh") } }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun AnnouncementPanel(feed: NoticeFeed, unread: Int, openAll: () -> Unit, openNotice: (Notice) -> Unit, retry: () -> Unit) {
-    if (feed.loading) {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Accent)
-        return
-    }
-    if (feed.error) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Secondary(LocaleStrings.get("Could not refresh announcements."), small = true)
-            TextButton(onClick = retry) { Text(LocaleStrings.get("Retry")) }
-        }
-        return
-    }
-    val notice = feed.notices.firstOrNull() ?: return
-    Card(onClick = { openNotice(notice) }, modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Surface, contentColor = Foreground)) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(10.dp), color = Accent.copy(alpha = 0.15f)) {
-                Box(Modifier.padding(8.dp)) {
-                    AppIcon(R.drawable.ic_bell, tint = Accent)
-                }
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(notice.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (unread > 0) Surface(onClick = openAll, shape = RoundedCornerShape(8.dp), color = Accent) {
-                        Text(if (unread == 1) "New" else "$unread New", color = Background, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                }
-                Text(notice.body, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Muted, fontSize = 12.sp)
-            }
-            AppIcon(R.drawable.ic_chevron, tint = Muted)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun NoticeCard(notice: Notice, unread: Boolean, open: () -> Unit) {
-    Card(onClick = open, modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Surface, contentColor = Foreground)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (unread) Text("New", color = Accent, fontSize = 12.sp)
-            Text(notice.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Text(notice.body, maxLines = 3, overflow = TextOverflow.Ellipsis, color = Muted, fontSize = 16.sp, lineHeight = 24.sp)
-            Secondary(noticeTime(notice), small = true)
-        }
     }
 }

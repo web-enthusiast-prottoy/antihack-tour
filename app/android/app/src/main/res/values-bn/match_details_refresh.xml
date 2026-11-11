@@ -1,0 +1,16 @@
+<resources>
+    <string name="details_refresh_0">রুমে প্রবেশ</string>
+    <string name="details_refresh_1">এন্ট্রি যাচাই করুন</string>
+    <string name="details_refresh_2">নিশ্চিত করে যোগ দিন</string>
+    <string name="details_refresh_3">এন্ট্রি নিশ্চিত হচ্ছে…</string>
+    <string name="details_refresh_4">এন্ট্রির পর ব্যালেন্স</string>
+    <string name="details_refresh_5">এন্ট্রিতে আগে ব্যালেন্স, পরে ব্যবহারযোগ্য জয়ী অর্থ কাটা হবে।</string>
+    <string name="details_refresh_6">ম্যাচের অবস্থা বদলেছে। যোগ দেওয়ার আগে এই অংশ বন্ধ করে হালনাগাদ করুন।</string>
+    <string name="details_refresh_7">প্রসারিত</string>
+    <string name="details_refresh_8">সংকুচিত</string>
+    <string name="details_refresh_9">যোগ দেওয়ার আগে</string>
+    <string name="details_refresh_10">যোগ দেওয়ার জন্য ব্যবহারযোগ্য</string>
+    <string name="details_refresh_11">অর্থ</string>
+    <string name="details_refresh_12">লোড হয়েছে</string>
+    <string name="details_refresh_13">এখনো কেউ নেই।</string>
+</resources>

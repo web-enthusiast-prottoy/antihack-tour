@@ -1,0 +1,6 @@
+<resources>
+    <string name="explore_joined">জন যোগ দিয়েছেন</string>
+    <string name="explore_loading">ম্যাচ লোড হচ্ছে…</string>
+    <string name="explore_scheduled">নির্ধারিত</string>
+    <string name="explore_days">দিন</string>
+</resources>

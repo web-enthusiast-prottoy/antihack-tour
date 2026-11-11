@@ -1,0 +1,16 @@
+<resources>
+    <string name="details_refresh_0">Room access</string>
+    <string name="details_refresh_1">Review entry</string>
+    <string name="details_refresh_2">Confirm &amp; join</string>
+    <string name="details_refresh_3">Confirming entry…</string>
+    <string name="details_refresh_4">Balance after entry</string>
+    <string name="details_refresh_5">Entry uses balance first, then available winnings.</string>
+    <string name="details_refresh_6">Match availability changed. Close this sheet and refresh before joining.</string>
+    <string name="details_refresh_7">Expanded</string>
+    <string name="details_refresh_8">Collapsed</string>
+    <string name="details_refresh_9">Before you join</string>
+    <string name="details_refresh_10">Available to join</string>
+    <string name="details_refresh_11">Amount</string>
+    <string name="details_refresh_12">Loaded</string>
+    <string name="details_refresh_13">No participants yet.</string>
+</resources>

@@ -1,3 +1,53 @@
+# Player UI refresh · remaining pages · 11 November 2026
+
+The remaining reviewed player designs are implemented. This section supersedes the older single-balance Wallet, expanded transaction list, inline Profile form, full announcement-card and single Matches-list descriptions below. Earlier Home/authentication, Explore and details/joining stages are retained.
+
+- My matches uses Upcoming/Results tabs, compact saved-artwork cards with the quiet top-right countdown and separate details/room actions. Confirmed past matches move to the existing owned history; unresolved entries remain reachable. The room shortcut checks the same current ban status and uses the existing server-release controller. Its credentials retain background/offline clearing and Copy/Refresh/Hide behaviour.
+- Results preserve My/All published scopes, title/ID search, debounce, cache/errors, pagination and pending matches. Compact thumbnail cards show placement, kills and announced award. Actual credited winnings remain separate. Opening a reward breakdown retains player name, match ID/time, reward components, kill-finalization and settlement states.
+- Wallet shows Balance and Winnings together, their spendable total and reserved winnings separately. Added-money and winnings labels follow the reviewed wording; whole amounts omit .00 while actual fractional paisa remain exact. A balance-information sheet explains spending/withdrawal rules. Withdraw stays disabled for unverified/zero winnings.
+- Activity uses compact icon/title/status/time/amount rows and a loaded-record filter. Opening a row reveals complete original transaction/provider references and withdrawal details. Existing owner queries, per-source paging, cache disclosure and linked deposit/withdrawal/ledger deduplication remain intact.
+- Add money uses the three existing validated fields, compact receiving-number/copy card and short approval note. Current-server-number, busy, persisted request ID, verification timeout and server-only approval checks remain. Payment outcomes display the actual server-derived message. Withdrawal uses a separate form, full review step and actual request receipt; payout, fee and reserved total stay distinct. No pending request is presented as money credited or paid out.
+- Profile uses the real email, game name and muted FF UID, with editing in a sheet. Contact/WhatsApp, language selection and explicit sign-out confirmation follow the reviewed groups. Existing guest/private scope, optional profile fields, limits, save method and language preferences remain.
+- Notifications group existing announcements by their actual Dhaka date, use compact unread-aware previews and a full selectable reader. Revision-based read keys, mark-all-read, cached/error/empty states, retry and system notification settings remain. Published Contact/Rules/About/Privacy pages share readable selectable content and retain the existing enabled/publication/link checks and offline fallback; no removed Profile links are reintroduced.
+- Native sheet, ripple, tab and route motion is retained. Large text stacks balance/stat/action layouts and the activity toolbar, with English/Bangla resources, readable long text, keyboard navigation and 48dp controls. No new production data, backend fields, credentials or signing configuration are required.
+
+Cross-page verification and remaining live/device acceptance limits are recorded in [FINAL-PLAYER-REFRESH.md](../FINAL-PLAYER-REFRESH.md).
+
+# Player UI refresh · stage 3 · 11 November 2026
+
+Match details and joining now implement the approved minimal designs. This section supersedes the older full-width countdown and single long details-page requirements for these screens. Home, authentication and Explore remain as previously implemented; My matches, Wallet and other later stages remain pending.
+
+- Details use saved match artwork with the quiet top-right countdown, the current title/mode/map/date, three compact metrics and Overview/Prizes/Players tabs. Large text switches metrics to readable labelled rows and wraps the tab controls. The fixed join action shows the actual fee while preserving the existing account, profile, ban, entry, cache and availability checks.
+- Overview leads with saved match rules, expanded by default with a short native disclosure transition. Room access follows: guests/pending entries get a compact disclosure; confirmed entries retain the existing server-checked credentials and Copy/Refresh/Hide actions. Room release polling, offline/background clearing, authentication and privacy logic are unchanged. Match ID/status use muted label-size text below these sections. Saved description, cancellation reason and registered roster remain available.
+- Prizes use a simple sorted position/amount table, highlighting first place and retaining exact fractional paisa, per-kill data and all cache/loading/unpublished/error/retry states. The admin editor and data subscriptions are preserved.
+- Players use numbered name rows, a tiny muted FF UID line and the existing teammates. Only the existing public participant document is read. Current public records omit ffUid, so legacy/missing values omit the UID line; no private profile reads, copied account UIDs or fabricated game IDs are introduced. Pagination, loaded-count disclosure and refresh/retry remain available.
+- Joining uses one compact match summary, fee/available balance after entry, required teammate fields for Duo/Squad and one confirmation action. The removed “Your player” panel is not recreated. Names, roster validation, keyboard navigation, restoration, pending/error/retry and exact existing Firebase submission remain intact. The view also disables confirmation if live availability, entry status or verified paid balance changes while open. Missing-profile/funding routes retain their existing destinations and pending-match continuation.
+
+Verification is recorded in [MATCH-DETAILS-JOIN-REFRESH.md](../MATCH-DETAILS-JOIN-REFRESH.md).
+
+# Player UI refresh · stage 2 · 11 November 2026
+
+Explore now implements the reviewed compact match-feed concept. This section supersedes the historical 190dp artwork and full-width sage countdown requirements for Explore only; My matches and details retain their current implementation until their own stages.
+
+- A clearable ID/title search sits beside the filter action. Small All/Solo/Duo/Squad pills share the existing mode state with the full filter sheet. Material's 32dp visual pills retain 48dp touch bounds and wrap at large text sizes. Category, fee, availability and date filtering remain available in the existing sheet.
+- Each whole-card action opens the same match ID. Saved match artwork fills a reserved 108dp banner. The approved quiet, dark countdown sits at its top-right, with a sage clock and tabular numbers; days, reached-start and live/review/completed/cancelled states are explicit. The banner can grow for accessibility text rather than clipping the badge. No bright countdown panel or separate timer row is used.
+- Match title and the existing mode/map/date are followed by Entry fee / Prize pool, a thin sage participation bar and exact joined/capacity text. Whole-taka amounts omit .00; fractional paisa remain exact. Confirmed/pending entries, full, closed and cancelled labels remain visible. The decorative progress bar clamps its fill without changing the displayed counts.
+- Empty first loads use the shared restrained skeleton; existing cards stay visible during later-page loading. Filter selection uses native state transitions and participation changes animate for 220ms. Platform animation scaling and reduced-motion skeleton behaviour remain in use.
+- Firebase queries, field mapping, live listeners, artwork reads/cache, category handoff, search/filter paging, cache/error/empty/retry handling, past-match visibility and join workflows are preserved. No backend/schema or production configuration changes are required.
+
+Stage-specific verification and live-test limits are recorded in [EXPLORE-REFRESH.md](../EXPLORE-REFRESH.md).
+
+# Player UI refresh · stage 1 · 10 November 2026
+
+The owner approved the reviewed charcoal/sage concepts and requested a staged implementation. This stage updates only player Home, Sign in and Create account. The remaining reviewed pages are design proposals for subsequent stages.
+
+- Home retains Firebase announcements, active/sorted/paged categories and their saved artwork. The 76dp logo gains the ANTIHACK / TOUR wordmark without “Esports”; category cards display only their existing names. A compact latest-announcement card, “Choose your arena” heading, portrait category artwork and direct Explore shortcut implement the reviewed composition. Category selection still filters Explore; the general Explore shortcut clears filters, like direct Explore navigation.
+- Initial Home loading uses stable skeletons; cached data, empty/error states and retry remain explicit. Card content enters with a short fade and 8dp movement. Skeleton shimmer is disabled when Android animators are disabled; Compose transitions retain platform animation-duration scaling. No fabricated progress or match data is introduced.
+- Authentication uses the existing island artwork and logo, simple Sign in/Create account titles, email/password/confirmation fields, inline validation, password visibility, keyboard Next/Done, a Bangla/English action and Continue browsing. Submitting still calls the unchanged Firebase session methods. Busy controls prevent duplicate submissions; outgoing animated forms cannot submit. Email/mode survive saved-state restoration; passwords remain unsaved. Closing returns to the opening route; successful authentication retains the existing resume-join behaviour.
+- The native theme, 48dp targets, safe-area/keyboard insets, large-text scrolling and bundled Bangla typography remain in use. Decorative wordmark text does not repeat the logo's accessibility name. Other player screens and the administrative app's workflows are unchanged.
+
+Verification and the distinction between local checks and live-release readiness are recorded in [HOME-AUTH-REFRESH.md](../HOME-AUTH-REFRESH.md).
+
 # Antihack Admin · Operations Desk
 
 The standalone staff app uses charcoal `#101311` and `#1B211D` surfaces, one sage action color `#C4DF9B`, and a gold-edged shield launcher with a silver A, matching the main Antihack crest. The same vector mark appears on staff sign-in, Overview and the wide-layout sidebar. Phones show five destinations across the bottom. At 840dp of available width the navigation moves to a sidebar. At large system text sizes the compact navigation uses labelled icon semantics.

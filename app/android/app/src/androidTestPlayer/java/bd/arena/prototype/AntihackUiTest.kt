@@ -23,7 +23,7 @@ class AntihackUiTest {
     @get:Rule val ui=createAndroidComposeRule<MainActivity>()
     private val outer=hasScrollAction() and !hasAnyAncestor(hasScrollAction())
     private fun auth()=FirebaseAuth.getInstance(FirebaseApp.getInstance("arena-native"))
-    private fun waitText(text:String){try{ui.waitUntil(20_000){if(text=="Antihack Tour")ui.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty()else ui.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()}}catch(error:Throwable){capture("failure-"+text.replace(Regex("[^A-Za-z0-9]+"),"-"));throw error}}
+    private fun waitText(text:String){try{ui.waitUntil(20_000){if(text=="Mark all read")ui.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty()else if(text=="Antihack Tour")ui.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty()else ui.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()}}catch(error:Throwable){capture("failure-"+text.replace(Regex("[^A-Za-z0-9]+"),"-"));throw error}}
     private fun waitGone(text:String){try{ui.waitUntil(20_000){ui.onAllNodesWithText(text).fetchSemanticsNodes().isEmpty()}}catch(error:Throwable){capture("failure-gone-"+text.replace(Regex("[^A-Za-z0-9]+"),"-"));throw error}}
     private fun scroll(text:String){ui.onNode(hasTestTag("player-content") and hasScrollAction()).performScrollToNode(hasText(text))}
     private fun capture(name:String){
@@ -97,6 +97,28 @@ class AntihackUiTest {
         waitText("Full Map")
         ui.onNodeWithTag("match-card-sample-squad").assertDoesNotExist()
     }
+    @Test fun exploreModePillsAndSheetUseTheSameFirebaseMatchFilters() {
+        guest();waitText("Full Map")
+        ui.onNode(hasText("Explore") and hasClickAction()).performClick()
+        waitText("Sample · Island Solo")
+        ui.onNodeWithTag("explore-mode-Duo").performClick().assertIsSelected()
+        waitText("Sample · Duo Survival")
+        ui.onNodeWithTag("match-card-sample-solo").assertDoesNotExist()
+        ui.onNodeWithTag("explore-filters").performClick()
+        waitText("Mode: Duo")
+        ui.onNodeWithText("Mode: Duo").performClick()
+        ui.onNode(hasText("Squad") and hasAnyAncestor(isPopup())).performClick()
+        ui.onNodeWithText("Show matches").performScrollTo().performClick()
+        waitText("Sample · Clash Squad")
+        ui.onNodeWithTag("explore-mode-Squad").assertIsSelected()
+        ui.onNodeWithTag("explore-search").performTextReplacement("sample-solo")
+        ui.onNodeWithTag("explore-mode-All").performClick()
+        waitText("Sample · Island Solo")
+        ui.onNodeWithTag("match-card-sample-squad").assertDoesNotExist()
+        ui.onNodeWithTag("match-image-sample-solo",useUnmergedTree=true).assertHeightIsEqualTo(108.dp)
+        ui.onNodeWithTag("match-card-sample-solo").performClick()
+        waitText("Join match")
+    }
     @Test fun guestBrowseJoinSignupAndSetupOnlyAtJoin() {
         guest();waitText("Full Map");ui.onNodeWithText("Wallet").assertDoesNotExist();capture("home")
         ui.onNodeWithText("Explore").performClick()
@@ -107,7 +129,7 @@ class AntihackUiTest {
         ui.onNodeWithContentDescription("Search match ID or title").performImeAction()
         waitText("Sample · Island Solo");capture("explore")
         scroll("Sample · Island Solo");ui.onNodeWithText("Sample · Island Solo").performClick()
-        scroll("Participants");ui.waitUntil(20_000){ui.onAllNodes(hasText("SamplePlayer",substring=true)).fetchSemanticsNodes().isNotEmpty()};capture("participants")
+        ui.onNodeWithTag("player-content").performScrollToNode(hasTestTag("details-tab-Players"));ui.onNodeWithTag("details-tab-Players").performClick();scroll("Participants");ui.waitUntil(20_000){ui.onAllNodes(hasText("SamplePlayer",substring=true)).fetchSemanticsNodes().isNotEmpty()};capture("participants")
         ui.onNodeWithText("Join match").performClick();waitText("Sign in")
         ui.onNodeWithText("New here? Create account").performScrollTo().performClick()
         val email="antihack-${System.currentTimeMillis()}@arena.test"
@@ -115,7 +137,7 @@ class AntihackUiTest {
         ui.onNodeWithText("Password").performTextInput("PlayerLocal123!")
         ui.onNodeWithText("Confirm password").performTextInput("PlayerLocal123!")
         ui.onNodeWithText("Display name").assertDoesNotExist();capture("signup")
-        ui.onNodeWithText("Create account").performScrollTo().performClick()
+        ui.onNodeWithTag("auth-submit").performScrollTo().performClick()
         waitText("Add username");ui.onNodeWithText("Add username").performClick()
         waitText("Edit profile");ui.onNodeWithText("Complete your profile").assertDoesNotExist()
         ui.onNodeWithText(email).assertExists();capture("profile-incomplete")
@@ -127,11 +149,11 @@ class AntihackUiTest {
         ui.onNodeWithText("Avatar").assertDoesNotExist();ui.onNodeWithText("Display name").assertDoesNotExist();capture("profile")
         ui.onNodeWithText("Support requests").assertDoesNotExist();ui.onNodeWithText("Privacy policy").assertDoesNotExist();ui.onNodeWithText("Contact").assertExists()
         scroll("Continue to match");ui.onNodeWithText("Continue to match").performClick();waitText("Join match")
-        ui.onNodeWithText("Join match").performClick();waitText("Confirm roster and join")
-        ui.onNodeWithText("Confirm roster and join").performScrollTo().performClick();waitText("Registration confirmed.")
+        ui.onNodeWithText("Join match").performClick();waitText("Review entry")
+        ui.onNodeWithTag("join-confirm").performScrollTo().performClick();waitText("Registration confirmed.")
         ui.onNodeWithText("OK").performClick();ui.onNodeWithContentDescription("Back").performClick()
         ui.onNodeWithText("Matches").performClick();waitText("Sample · Island Solo");capture("matches")
-        ui.onNodeWithText("Wallet").performClick();waitText("Transaction history");capture("wallet-empty")
+        ui.onNodeWithText("Wallet").performClick();waitText("Activity");capture("wallet-empty")
         auth().signOut()
     }
     @Test fun publicResultsSearchMatchesBothTitleAndId() {
@@ -159,7 +181,7 @@ class AntihackUiTest {
             ui.onNodeWithContentDescription("Search match ID or title").performImeAction()
             waitText("Sample · Island Solo");capture("explore-english-normal")
             ui.onNodeWithText("Profile").performClick()
-            ui.onNodeWithContentDescription("App language: Bangla").performClick()
+            ui.onNodeWithText("Language").performScrollTo().performClick();ui.onNodeWithTag("language-true").performClick()
             ui.onNodeWithText("খুঁজুন").performClick();waitText("Sample · Island Solo");capture("explore-bangla-normal")
             motionKeys.forEach{shell("settings put global $it 0")}
             shell("wm size 984x2132");shell("settings put system font_scale 2.0")
@@ -188,7 +210,7 @@ class AntihackUiTest {
 
     @Test fun depositSubmissionPreservesBalanceAndHistory() {
         guest();Tasks.await(auth().signInWithEmailAndPassword("admin@arena.test","ArenaLocal123!"),30,TimeUnit.SECONDS)
-        waitText("Wallet");ui.onNodeWithText("Wallet").performClick();waitText("Transaction history")
+        waitText("Wallet");ui.onNodeWithText("Wallet").performClick();waitText("Activity")
         ui.onNodeWithText("Amount sent (৳)").assertDoesNotExist()
         ui.onNodeWithText("Add money").performClick();waitText("Sender’s mobile number")
         val reference="UI${System.currentTimeMillis()}"
@@ -196,13 +218,14 @@ class AntihackUiTest {
         ui.onNodeWithText("Transaction ID").performTextInput(reference)
         ui.onNodeWithText("Sender’s mobile number").performTextInput("01700000000");capture("deposit-sheet")
         ui.onNodeWithText("Submit request").performScrollTo().performClick()
-        ui.waitUntil(20_000){ui.onAllNodesWithText("Deposit submitted for review. No funds have been credited.",substring=true).fetchSemanticsNodes().isNotEmpty()}
-        ui.onNodeWithText("OK").performClick()
-        ui.waitUntil(20_000) {
-            runCatching { scroll("Payment reference: $reference") }.isSuccess
-        }
+        ui.waitUntil(40_000){ui.onAllNodesWithText("Request saved. Awaiting admin approval.",substring=true).fetchSemanticsNodes().isNotEmpty()}
+        ui.onNodeWithTag("payment-done").performScrollTo().performClick()
+        ui.onNodeWithTag("player-content").performScrollToNode(hasText("৳10.25"))
+        ui.onAllNodes(hasText("Add money") and hasText("৳10.25") and hasClickAction()).onFirst().performClick()
+        ui.onNodeWithText("Payment reference: $reference").assertExists()
         ui.onAllNodes(hasText("pending", ignoreCase = true)).onFirst().assertExists()
         capture("wallet-pending")
+        ui.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()}
         ui.onNode(hasText("Profile") and hasClickAction()).performClick()
         scroll("Sign out")
         ui.onNodeWithText("Administration").assertDoesNotExist()

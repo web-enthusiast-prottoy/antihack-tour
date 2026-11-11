@@ -38,7 +38,7 @@ internal fun WithdrawalForm(session:AdminSession,busyChanged:(Boolean)->Unit,don
     var available by remember{mutableStateOf(0L)}
     var loading by remember{mutableStateOf(true)}
     var error by remember{mutableStateOf("")}
-    var review by remember{mutableStateOf(false)}
+    var review by rememberSaveable(uid){mutableStateOf(false)}
     var submitted by remember{mutableStateOf<DocumentSnapshot?>(null)}
     LaunchedEffect(operations.busy){busyChanged(operations.busy)}
     DisposableEffect(Unit){onDispose{busyChanged(false)}}
@@ -56,44 +56,21 @@ internal fun WithdrawalForm(session:AdminSession,busyChanged:(Boolean)->Unit,don
     val total=value?.let{runCatching{withdrawalTotal(it,fee)}.getOrNull()}
     val amountValid=total!=null&&minimum>0&&value>=minimum&&total<=available
     val numberValid=validDepositSender(number)
-    Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(20.dp).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Text(LocaleStrings.get("Withdraw winnings"),style=MaterialTheme.typography.headlineSmall)
-        if(BuildConfig.LOCAL_OPERATIONS)Text(LocaleStrings.get("Local sample only. No real money is transferred."),style=MaterialTheme.typography.bodySmall)
-        if(loading)LinearProgressIndicator(Modifier.fillMaxWidth())
-        if(submitted!=null){
-            Text(LocaleStrings.get("Withdrawal request received."),Modifier.semantics{liveRegion=LiveRegionMode.Polite})
-            Text(submitted!!.id,style=MaterialTheme.typography.bodySmall)
-            Text(LocaleStrings.get(submitted!!.getString("status").orEmpty()))
-            Text(LocaleStrings.get("Track its status in Transaction history."))
-            Button(onClick={intent.edit().clear().apply();done()},modifier=Modifier.fillMaxWidth()){Text(LocaleStrings.get("Done"))}
-        }else {
-            LabeledValue(LocaleStrings.get("Available winnings"),money(available))
-            if(policy?.getBoolean("enabled")!=true&&!loading)Text(LocaleStrings.get("New withdrawals are not enabled. Existing requests appear in Transaction history."))
-            if(minimum>0)LabeledValue(LocaleStrings.get("Minimum withdrawal"),money(minimum))
-            OutlinedTextField(amount,{amount=it},label={Text(LocaleStrings.get("Withdrawal amount (taka)"))},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true,isError=amount.isNotBlank()&&!amountValid,supportingText=if(amount.isNotBlank()&&!amountValid)({Text(LocaleStrings.get("Use up to two decimals, meet the minimum, and include the fee within your winnings."))})else null,enabled=!operations.busy,modifier=Modifier.fillMaxWidth())
-            OutlinedTextField(number,{number=it.trim()},label={Text(LocaleStrings.get("Payout bKash number"))},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={keyboard?.hide()}),singleLine=true,isError=number.isNotBlank()&&!numberValid,supportingText=if(number.isNotBlank()&&!numberValid)({Text(LocaleStrings.get("Enter an 11-digit bKash number."))})else null,enabled=!operations.busy,modifier=Modifier.fillMaxWidth())
-            LabeledValue(LocaleStrings.get("Withdrawal fee"),money(fee))
-            if(total!=null)LabeledValue(LocaleStrings.get("Total reserved"),money(total))
-            WithdrawalError(error);WithdrawalError(operations.error)
-            Button(onClick={review=true},enabled=!loading&&policy?.getBoolean("enabled")==true&&amountValid&&numberValid&&!operations.busy,modifier=Modifier.fillMaxWidth()){Text(LocaleStrings.get("Review withdrawal"))}
-            TextButton(onClick={reload++},enabled=!operations.busy){Text(LocaleStrings.get("Reload"))}
-        }
+    Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(20.dp).navigationBarsPadding()) {
+        WithdrawalContent(WithdrawalViewState(available,minimum,fee,total,amountValid,numberValid,loading,policy?.getBoolean("enabled")==true,operations.busy,review,
+            listOf(error,operations.error).filter{it.isNotBlank()}.joinToString("\n"),submitted?.let{WithdrawalReceipt(it.id,it.getString("status").orEmpty(),it.getLong("amountPaisa")?:0)}),
+            amount,number,changeAmount={amount=it},changeNumber={number=it.trim()},review={keyboard?.hide();review=true},back={review=false},confirm={
+                if(intent.edit().putString("id",id).putString("amount",amount).putString("destination",number).commit())operations.submit(id,value!!,number,policy!!){submitted=it;review=false}
+            },reload={reload++},done={intent.edit().clear().apply();done()})
     }
-    if(review)AlertDialog(onDismissRequest={if(!operations.busy)review=false},title={Text(LocaleStrings.get("Confirm withdrawal"))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)){
-        Text(number,style=MaterialTheme.typography.titleLarge)
-        LabeledValue(LocaleStrings.get("Payout amount"),money(value?:0));LabeledValue(LocaleStrings.get("Withdrawal fee"),money(fee));LabeledValue(LocaleStrings.get("Total reserved"),money(total?:0))
-        Text(LocaleStrings.get("Check the payout number. This total is held from your winnings while an admin reviews and sends the payout."))
-        WithdrawalError(operations.error)
-    }},confirmButton={Button(onClick={
-        if(intent.edit().putString("id",id).putString("amount",amount).putString("destination",number).commit())operations.submit(id,value!!,number,policy!!){submitted=it;review=false}
-    },enabled=!operations.busy){Text(LocaleStrings.get(if(operations.busy)"Please wait…" else "Confirm request"))}},dismissButton={TextButton(onClick={review=false},enabled=!operations.busy){Text(LocaleStrings.get("Back"))}})
 }
 
 @Composable
-internal fun WithdrawalDetails(record:DocumentSnapshot,privateAccount:Boolean=false) {
-    LabeledValue(LocaleStrings.get("Payout amount"),money(record.getLong("amountPaisa")?:0))
+internal fun WithdrawalDetails(record:DocumentSnapshot,privateAccount:Boolean=false,compact:Boolean=false) {
+    fun amount(value:Long)=if(compact)compactMoney(value)else money(value)
+    LabeledValue(LocaleStrings.get("Payout amount"),amount(record.getLong("amountPaisa")?:0))
     val fee=record.getLong("feePaisa")?:0
-    Text(LocaleStrings.get("Withdrawal fee")+": "+money(fee)+" · "+LocaleStrings.get("Total reserved")+": "+money(record.getLong("totalPaisa")?:0),style=MaterialTheme.typography.bodySmall)
+    Text(LocaleStrings.get("Withdrawal fee")+": "+amount(fee)+" · "+LocaleStrings.get("Total reserved")+": "+amount(record.getLong("totalPaisa")?:0),style=MaterialTheme.typography.bodySmall)
     androidx.compose.foundation.text.selection.SelectionContainer{Text(LocaleStrings.get("Payout bKash number")+": "+record.getString("destination").orEmpty())}
     Text(LocaleStrings.get("Request ID")+": "+record.id,style=MaterialTheme.typography.bodySmall)
     if(privateAccount)Text(LocaleStrings.get("Account reference")+": "+record.getString("uid").orEmpty(),style=MaterialTheme.typography.bodySmall)

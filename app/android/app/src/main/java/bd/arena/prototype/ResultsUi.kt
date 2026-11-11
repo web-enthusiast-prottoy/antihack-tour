@@ -1,6 +1,7 @@
 package bd.arena.prototype
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
@@ -21,7 +22,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ResultsScreen(session:AdminSession,back:()->Unit) {
+internal fun ResultsScreen(session:AdminSession,inMatches:Boolean=false,back:()->Unit) {
     fun t(text:String)=LocaleStrings.get(text)
     val results=remember(session.uid){PublishedResults(session)}
     val history=remember(session.uid){MyMatchResults(session)}
@@ -45,7 +46,8 @@ internal fun ResultsScreen(session:AdminSession,back:()->Unit) {
     val cached=if(own)history.cached else state.cached
     val error=if(own&&history.error)"Could not load results. Reconnect and retry." else if(own)"" else state.error
     LazyColumn(Modifier.widthIn(max=640.dp).fillMaxSize().imePadding(),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        item {ScreenHeader(t("Results"),back=back,refresh={refresh()},refreshEnabled=!loading)}
+        item {ScreenHeader(t(if(inMatches)"My matches" else "Results"),back=if(inMatches)null else back,refresh={refresh()},refreshEnabled=!loading)}
+        if(inMatches)item {MatchSectionTabs(true,upcoming=back,history={})}
         if(session.uid!=null)item {FlowRow(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {FilterChip(own,{own=true},label={Text(t("My results"))});FilterChip(!own,{own=false},label={Text(t("All published"))})}}
         item {
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -58,14 +60,7 @@ internal fun ResultsScreen(session:AdminSession,back:()->Unit) {
         if(!loading&&error.isEmpty()&&(if(own)ownMatches.isEmpty()else state.rows.isEmpty()))item {Text(t(if(own)"No past participated matches found." else "No published results found."))}
         if(own)items(ownMatches,key={it.id}) {match->
             val row=history.published[match.id]
-            if(row!=null)PublishedResultCard(row)else Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Text(match.title,style=MaterialTheme.typography.titleLarge)
-                    Text(t("Match ID")+": "+match.id,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(listOf(t(match.mode.replaceFirstChar{it.uppercase()}),match.map,resultMatchTime(match.startsAtMillis)).filter{it.isNotEmpty()}.joinToString(" · "))
-                    Text(t(if(match.matchStatus=="cancelled")"Cancelled" else "Results pending"),color=MaterialTheme.colorScheme.primary)
-                }
-            }
+            if(row!=null)PublishedResultCard(row)else PendingResultCard(match,resultMatchTime(match.startsAtMillis))
         } else items(state.rows,key={it.id}) {row->PublishedResultCard(row)}
         if(loading)item {LinearProgressIndicator(Modifier.fillMaxWidth())}
         if(!own&&state.more&&!state.loading)item {OutlinedButton(onClick={results.load(own,search,false)},modifier=Modifier.fillMaxWidth()){Text(t("Load more"))}}
@@ -74,24 +69,16 @@ internal fun ResultsScreen(session:AdminSession,back:()->Unit) {
 
 private fun resultMatchTime(startsAt:Long):String = if(startsAt<=0)"" else java.time.Instant.ofEpochMilli(startsAt).atZone(ZoneId.of("Asia/Dhaka")).format(DateTimeFormatter.ofPattern("dd MMM yyyy · h:mm a"))
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PublishedResultCard(row:com.google.firebase.firestore.DocumentSnapshot) {
-    fun t(text:String)=LocaleStrings.get(text)
-    Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface,contentColor=MaterialTheme.colorScheme.onSurface)) {Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Text(row.getString("title").orEmpty(),style=MaterialTheme.typography.titleLarge)
-        Text(t("Match ID")+": "+row.getString("match").orEmpty(),color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)
-        Text(listOf(t(row.getString("mode").orEmpty()),row.getString("map").orEmpty(),row.getTimestamp("startsAt")?.toDate()?.toInstant()?.atZone(ZoneId.of("Asia/Dhaka"))?.format(DateTimeFormatter.ofPattern("dd MMM yyyy · h:mm a"))?:"").filter{it.isNotEmpty()}.joinToString(" · "))
-        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text(row.getString("username").orEmpty(),style=MaterialTheme.typography.titleMedium)
-        }
-        FlowRow(horizontalArrangement=Arrangement.spacedBy(16.dp)) {Text(if((row.getLong("placement")?:0)>0)t("Placement")+": #${row.getLong("placement")}" else t("Placement not recorded"));Text(t("Kills")+": ${row.getLong("kills")}")}
-        if(row.getLong("rewardVersion")==2L) {
-            LabeledValue(t("Placement reward"),money(row.getLong("placementPaisa")?:0))
-            LabeledValue(t("Kill reward credited"),money(row.getLong("killPaisa")?:0))
-            if(row.getBoolean("killFinalized")!=true)Text(t("Kill rewards pending"),style=MaterialTheme.typography.bodySmall)
-        }
-        Text(t("Announced award")+": "+money(row.getLong("awardPaisa")?:0),color=MaterialTheme.colorScheme.primary)
-        Text(if(row.getString("settlementStatus")=="credited")t("Credited to winnings")+": "+money(row.getLong("creditedPaisa")?:0) else t(if(row.getString("settlementStatus")=="pending")"Not credited · awaiting settlement" else "No prize credit applies"),style=MaterialTheme.typography.bodySmall)
-    }}
+    val model=ResultSummary(row.id,row.getString("match").orEmpty(),row.getString("title").orEmpty(),row.getString("mode").orEmpty(),row.getString("map").orEmpty(),
+        resultMatchTime(row.getTimestamp("startsAt")?.toDate()?.time?:0),row.getString("username").orEmpty(),row.getLong("placement")?:0,row.getLong("kills")?:0,
+        row.getLong("awardPaisa")?:0,row.getLong("creditedPaisa")?:0,row.getString("settlementStatus").orEmpty(),row.getLong("rewardVersion")?:0,
+        row.getLong("placementPaisa")?:0,row.getLong("killPaisa")?:0,row.getBoolean("killFinalized")==true)
+    var open by rememberSaveable(row.id){mutableStateOf(false)}
+    ResultCard(model){open=true}
+    if(open)ModalBottomSheet(onDismissRequest={open=false}) {
+        androidx.compose.foundation.layout.Box(Modifier.navigationBarsPadding().verticalScroll(androidx.compose.foundation.rememberScrollState())){ResultBreakdown(model)}
+    }
 }

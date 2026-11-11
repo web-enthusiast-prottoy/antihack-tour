@@ -62,7 +62,7 @@ class MinimalUiTest {
         ui.onNodeWithText("Explore").performClick();scroll(title);capture("explore")
         ui.onNodeWithText(title).performClick();capture("details")
         ui.onNodeWithText("Join match").performClick()
-        ui.onNodeWithText("Confirm roster and join").performScrollTo().performClick();ui.waitUntil(20_000){ui.onAllNodesWithText("Registration confirmed.").fetchSemanticsNodes().isNotEmpty()};ui.onNodeWithText("OK").performClick()
+        ui.onNodeWithTag("join-confirm").performScrollTo().performClick();ui.waitUntil(20_000){ui.onAllNodesWithText("Registration confirmed.").fetchSemanticsNodes().isNotEmpty()};ui.onNodeWithText("OK").performClick()
         ui.onNodeWithContentDescription("Back").performClick();ui.onNodeWithText("Matches").performClick();scroll(title);capture("my-matches")
         ui.onNodeWithText("Wallet").performClick();ui.onNodeWithText("Amount sent (৳)").assertDoesNotExist();ui.onNodeWithText("Add money").performClick()
         ui.onNodeWithText("Sender’s mobile number").performTextInput("01700000000");ui.onNodeWithText("Amount sent (৳)").performTextInput("10.25");ui.onNodeWithText("Transaction ID").performTextInput("UI${System.currentTimeMillis()}");capture("deposit-sheet")

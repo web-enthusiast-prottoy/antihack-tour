@@ -1,0 +1,12 @@
+<resources>
+    <string name="refresh_latest_update">সর্বশেষ খবর</string>
+    <string name="refresh_next_challenge">আপনার পরের চ্যালেঞ্জ</string>
+    <string name="refresh_choose_arena">আপনার খেলার ধরন বেছে নিন।</string>
+    <string name="refresh_looking_for_match">ম্যাচ খুঁজছেন?</string>
+    <string name="refresh_browse_categories">খুঁজুন থেকে সব বিভাগের ম্যাচ দেখুন।</string>
+    <string name="refresh_loading_categories">বিভাগ লোড হচ্ছে…</string>
+    <string name="refresh_loading_announcements">ঘোষণা লোড হচ্ছে…</string>
+    <string name="refresh_continue_browsing">ম্যাচ দেখতে থাকুন</string>
+    <string name="refresh_signing_in">সাইন ইন হচ্ছে…</string>
+    <string name="refresh_creating_account">অ্যাকাউন্ট খোলা হচ্ছে…</string>
+</resources>

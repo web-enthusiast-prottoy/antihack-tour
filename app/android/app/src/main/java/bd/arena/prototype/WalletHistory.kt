@@ -3,6 +3,9 @@ package bd.arena.prototype
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.google.firebase.firestore.*
@@ -10,6 +13,7 @@ import com.google.android.gms.tasks.Tasks
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WalletHistory(session:AdminSession,deposits:List<DepositActivity>) {
     var records by remember(session.uid){mutableStateOf<List<DocumentSnapshot>>(emptyList())}
@@ -51,42 +55,41 @@ internal fun WalletHistory(session:AdminSession,deposits:List<DepositActivity>) 
     val withdrawalIds=withdrawals.map{it.id}.toSet()
     val ledger=records.filter{it.reference.parent.id!="withdrawals"&&it.getString("withdrawal") !in withdrawalIds}
     val credited=ledger.mapNotNull{it.getString("request")?:it.getString("deposit")}.toSet()
-    Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        Row {Text(LocaleStrings.get("Transaction history"),Modifier.weight(1f),style=MaterialTheme.typography.titleLarge);TextButton(onClick={load(true)},enabled=!loading){Text(LocaleStrings.get("Refresh"))}}
-        if(cached)Text(LocaleStrings.get("Saved history · reconnect to refresh"),style=MaterialTheme.typography.bodySmall)
-        val rows=deposits.filter{it.id !in credited}.map{WalletRow("Deposit",it.amount,it.status,it.id,it.reference,it.createdAt)}+
-            ledger.map{WalletRow(it.getString("type").orEmpty().replace('_',' '),it.getLong("delta")?:0,it.getString("status").orEmpty(),it.id,it.getString("reference").orEmpty(),it.getTimestamp("at"))}+
+    val rows=deposits.filter{it.id !in credited}.map{WalletRow("Deposit",it.amount,it.status,it.id,it.reference,it.createdAt,source=(if(BuildConfig.LOCAL_OPERATIONS)"depositRequests/" else "walletDeposits/")+it.id)}+
+            ledger.map{WalletRow(it.getString("type").orEmpty().replace('_',' '),it.getLong("delta")?:0,it.getString("status").orEmpty(),it.id,it.getString("reference").orEmpty(),it.getTimestamp("at"),source=it.reference.path)}+
             withdrawals.map{WalletRow("Withdrawal",0,it.getString("status").orEmpty(),it.id,"",
-                it.getTimestamp(if(it.getString("status")=="sent")"decidedAt" else "createdAt")?:it.getTimestamp("createdAt"),it)}
-        rows.sortedByDescending{it.time?.toDate()?.time?:Long.MAX_VALUE}.forEach{WalletTransactionRow(it)}
+                it.getTimestamp(if(it.getString("status")=="sent")"decidedAt" else "createdAt")?:it.getTimestamp("createdAt"),it,source=it.reference.path)}
+    var selected by rememberSaveable{mutableStateOf<String?>(null)}
+    var filter by rememberSaveable{mutableStateOf("All activity")}
+    fun key(row:WalletRow)=row.source
+    Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        WalletActivityHeader(filter,loading,choose={filter=it},refresh={load(true)})
+        if(cached)Text(LocaleStrings.get("Saved history · reconnect to refresh"),style=MaterialTheme.typography.bodySmall)
+        val visible=rows.filter { walletActivityMatches(it.type,filter) }
+        visible.sortedByDescending{it.time?.toDate()?.time?:Long.MAX_VALUE}.forEach { row ->
+            WalletActivityItem(ActivitySummary(row.id,activityTitle(row.type),activityAmount(row),row.status,walletTime(row.time),row.withdrawal==null&&row.amount>0&&row.status=="completed",key=row.source)){selected=key(row)}
+        }
+        if(visible.isEmpty()&&rows.isNotEmpty())Text(LocaleStrings.get("No loaded activity matches this filter."),style=MaterialTheme.typography.bodySmall)
         if(!loading&&!error&&rows.isEmpty())Text(LocaleStrings.get("No transactions yet"),Modifier.padding(vertical=24.dp),color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(error){Text(LocaleStrings.get("Could not load history. Reconnect and retry."),color=MaterialTheme.colorScheme.error);TextButton(onClick={load(cursors.isEmpty())}){Text(LocaleStrings.get("Retry"))}}
         if(loading)LinearProgressIndicator(Modifier.fillMaxWidth())
         if(remaining.isNotEmpty()&&!loading&&!error)OutlinedButton(onClick={load(false)},modifier=Modifier.fillMaxWidth()){Text(LocaleStrings.get("Load more"))}
     }
+    rows.find{key(it)==selected}?.let {row->ModalBottomSheet(onDismissRequest={selected=null},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            if(row.withdrawal!=null) {
+                Text(LocaleStrings.get("Transaction details"),style=MaterialTheme.typography.titleLarge)
+                Text(activityAmount(row),style=MaterialTheme.typography.headlineLarge)
+                Text(LocaleStrings.get(row.status),style=MaterialTheme.typography.labelLarge)
+                WithdrawalDetails(row.withdrawal,compact=true)
+            } else WalletActivityDetails(ActivitySummary(row.id,activityTitle(row.type),activityAmount(row),row.status,walletTime(row.time,true),row.amount>0&&row.status=="completed",key=row.source,reference=row.reference,
+                referenceLabel=if(row.type.equals("prize",true))"Match ID:" else "Payment reference: "))
+        }
+    }}
 }
-private data class WalletRow(val type:String,val amount:Long,val status:String,val id:String,val reference:String,val time:com.google.firebase.Timestamp?,val withdrawal:DocumentSnapshot?=null)
-@Composable
-private fun WalletTransactionRow(row:WalletRow) {
-    val (type,amount,status,id,reference,time,withdrawal)=row
-    val typeColor=when {
-        type.equals("deposit",true)->MaterialTheme.colorScheme.primary
-        type.equals("withdrawal",true)->MaterialTheme.colorScheme.tertiary
-        else->MaterialTheme.colorScheme.onSurface
-    }
-    Column(Modifier.fillMaxWidth().padding(vertical=14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-            Text(LocaleStrings.get(type.replaceFirstChar{it.uppercase()}),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,color=typeColor)
-            if(withdrawal==null)Text((if(amount<0)"−" else if(status=="completed")"+" else "")+money(kotlin.math.abs(amount)),style=MaterialTheme.typography.titleMedium,color=if(status=="completed"&&amount>0)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-        }
-        Text(LocaleStrings.get(status),style=MaterialTheme.typography.labelMedium)
-        if(withdrawal!=null) {
-            WithdrawalDetails(withdrawal)
-        }else {
-            Text(time?.toDate()?.toInstant()?.atZone(ZoneId.of("Asia/Dhaka"))?.format(DateTimeFormatter.ofPattern("dd MMM yyyy · h:mm a"))?:LocaleStrings.get("Awaiting server timestamp"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(LocaleStrings.get("Transaction ID: ").trimEnd()+" "+id,style=MaterialTheme.typography.bodySmall)
-            if(reference.isNotBlank())Text((if(type.equals("prize",true))LocaleStrings.get("Match ID")+":" else LocaleStrings.get("Payment reference: ").trimEnd())+" "+reference,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-    HorizontalDivider(color=MaterialTheme.colorScheme.outline.copy(alpha=0.25f))
+private data class WalletRow(val type:String,val amount:Long,val status:String,val id:String,val reference:String,val time:com.google.firebase.Timestamp?,val withdrawal:DocumentSnapshot?=null,val source:String=type+":"+id)
+private fun walletTime(time:com.google.firebase.Timestamp?,full:Boolean=false)=time?.toDate()?.toInstant()?.atZone(ZoneId.of("Asia/Dhaka"))?.format(DateTimeFormatter.ofPattern(if(full)"dd MMM yyyy · h:mm a" else "dd MMM · h:mm a"))?:LocaleStrings.get("Awaiting server timestamp")
+private fun activityAmount(row:WalletRow):String {
+    row.withdrawal?.let{return (if(row.status=="sent")"−" else "")+compactMoney(it.getLong(if(row.status=="sent")"totalPaisa" else "amountPaisa")?:0)}
+    return (if(row.amount<0)"−" else if(row.status=="completed")"+" else "")+compactMoney(kotlin.math.abs(row.amount))
 }

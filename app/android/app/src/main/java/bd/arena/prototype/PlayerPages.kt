@@ -57,15 +57,9 @@ internal fun PlayerPageScreen(session:AdminSession,id:String,bangla:Boolean,back
             TextButton(onClick={retry++}){Text(LocaleStrings.get("Retry"))}
         } else if(!loading&&record==null)Text(if(cached)t("No saved published copy is available. Reconnect and retry.","প্রকাশিত পৃষ্ঠার সংরক্ষিত কপি নেই। সংযোগ দিয়ে আবার চেষ্টা করুন।")else t("The operator has not published this information yet.","পরিচালক এখনো এই তথ্য প্রকাশ করেননি।"))
         record?.let {page ->
-            SelectionContainer {Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
-                Text(page.getString("title").orEmpty(),style=MaterialTheme.typography.titleLarge)
-                Text(page.getString("body").orEmpty(),style=MaterialTheme.typography.bodyLarge)
-            }}
-            page.getString("link")?.takeIf{validPageLink(it)}?.let {link ->
-                Text(java.net.URI(link).host,style=MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick={linkFailed=runCatching{uriHandler.openUri(link)}.isFailure}) {Text(t("Open contact or information link","যোগাযোগ বা তথ্যের লিংক খুলুন"))}
-                if(linkFailed)Text(t("Could not open the link on this device.","এই ডিভাইসে লিংক খোলা যায়নি।"),color=MaterialTheme.colorScheme.error)
-            }
+            val link=page.getString("link")?.takeIf{validPageLink(it)}
+            InformationContent(page.getString("title").orEmpty(),page.getString("body").orEmpty(),link?.let{java.net.URI(it).host},linkFailed,
+                open={if(link!=null)linkFailed=runCatching{uriHandler.openUri(link)}.isFailure})
         }
     }
 }
