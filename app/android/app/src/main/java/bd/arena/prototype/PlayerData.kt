@@ -18,6 +18,21 @@ internal class PlayerData(val session: AdminSession) {
     val entryBalance:Long get()=balance+winnings
     var reservedWinnings by mutableStateOf(0L)
     var balanceCached by mutableStateOf(true)
+    var walletRefreshing by mutableStateOf(false);private set
+    fun refreshWallet() {
+        val uid=session.uid?:return
+        if(walletRefreshing)return
+        walletRefreshing=true
+        session.db.document("wallets/$uid").get(Source.SERVER).addOnCompleteListener {task->
+            if(session.uid==uid) {
+                walletRefreshing=false
+                // The existing live listener remains the single writer of balance values.
+                if(!task.isSuccessful) {
+                    balanceCached=true;error="Wallet could not refresh. Reconnect and retry."
+                }else if(error=="Wallet could not refresh. Reconnect and retry.")error=""
+            }
+        }
+    }
     var matchesLoading by mutableStateOf(true)
     var matches by mutableStateOf<List<Tournament>>(emptyList())
     var matchesCached by mutableStateOf(true)

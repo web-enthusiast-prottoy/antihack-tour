@@ -14,6 +14,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ResultsSearchFilters(input:String,change:(String)->Unit,own:Boolean,signedIn:Boolean,scope:(Boolean)->Unit,submit:()->Unit) {
+    Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        CompactSearch(input,change,LocaleStrings.get("Search match ID or title"),Modifier.testTag("results-search"),submit=submit)
+        if(signedIn)FlowRow(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            FilterChip(own,{scope(true)},label={Text(LocaleStrings.get("My results"))},modifier=Modifier.testTag("results-scope-own"))
+            FilterChip(!own,{scope(false)},label={Text(LocaleStrings.get("All published"))},modifier=Modifier.testTag("results-scope-all"))
+        }
+    }
+}
+
 internal fun compactMoney(paisa:Long)=money(paisa).removeSuffix(".00")
 internal data class ResultSummary(val id:String,val match:String,val title:String,val mode:String,val map:String,val time:String,val username:String,
     val placement:Long,val kills:Long,val award:Long,val credited:Long,val settlement:String,val version:Long,val placementReward:Long,val killReward:Long,val killsFinal:Boolean)

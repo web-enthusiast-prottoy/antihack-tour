@@ -112,7 +112,7 @@ class RemainingPagesUiTest {
     }
     @Test fun walletUsesBothBalancesExcludesReserveAndHasBothActions() {
         var add=0;var withdraw=0
-        content{ScreenHeader("Wallet");WalletBalances(60000,25000,10000,false,{add++},{withdraw++});WalletActivityHeader("All activity",false,{},{})
+        content{ScreenHeader("Wallet");WalletBalances(60000,25000,10000,false,{add++},{withdraw++});WalletActivityHeader("All activity",{})
             WalletActivityItem(ActivitySummary("reward","Match reward","+৳250","completed","11 Nov · 7:45 PM",true)){}
             WalletActivityItem(ActivitySummary("deposit","Add money","+৳500","completed","11 Nov · 6:12 PM",true)){}
         }
@@ -165,10 +165,10 @@ class RemainingPagesUiTest {
         ui.onNodeWithText("Transaction ID: REQUEST-123").assertExists();ui.onNodeWithText("Payment reference: PROVIDER-456").assertExists()
         ui.onNodeWithText(row.time).assertExists();capture("transaction-details")
     }
-    @Test fun largeBanglaActivityToolbarWrapsAndCallsRefreshAndFilters() {
-        var filter by mutableStateOf("All activity");var refreshes=0
-        content(bangla=true,fontScale=2f,narrow=true){WalletActivityHeader(filter,false,{filter=it},{refreshes++})}
-        fits(LocaleStrings.get("Activity"));fits(LocaleStrings.get("All activity"));tap("activity-refresh");assertEquals(1,refreshes)
+    @Test fun largeBanglaActivityToolbarKeepsOnlyTheFilter() {
+        var filter by mutableStateOf("All activity")
+        content(bangla=true,fontScale=2f,narrow=true){WalletActivityHeader(filter,{filter=it})}
+        fits(LocaleStrings.get("Activity"));fits(LocaleStrings.get("All activity"));ui.onNodeWithTag("activity-refresh").assertDoesNotExist()
         tap("activity-filter")
         ui.onNode(hasText(LocaleStrings.get("Withdrawal")) and hasAnyAncestor(isPopup())).performClick();assertEquals("Withdrawal",filter)
     }

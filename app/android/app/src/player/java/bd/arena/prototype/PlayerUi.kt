@@ -49,6 +49,7 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
         var authenticating by rememberSaveable {mutableStateOf(false)}
         var filtersOpen by rememberSaveable {mutableStateOf(false)}
         var matchAccessRetry by remember(selected,session.uid){mutableStateOf(0)}
+        var detailRefresh by remember(selected){mutableIntStateOf(0)}
         val matchAccess=playerBanStatus(session,selected?.let{"matches/$it/bans/${session.uid}"},matchAccessRetry)
         var pending by rememberSaveable {mutableStateOf<String?>(null)}
         var requirements by rememberSaveable {mutableStateOf(false)}
@@ -87,6 +88,9 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
         LaunchedEffect(tab,selected,search,category,mode,feeFilter,availabilityFilter,timeFilter,data.matchesMore,data.matchesLoading) {
             val filtering=search.isNotBlank()||category.isNotBlank()||mode!="All"||feeFilter!="All"||availabilityFilter!="All"||timeFilter!="Any time"
             if(tab=="Explore"&&selected==null&&filtering&&data.matchesMore&&!data.matchesLoading)data.loadMoreMatches()
+        }
+        LaunchedEffect(tab,selected,data.entries,data.matches,data.matchesMore,data.matchesLoading,data.matchesError) {
+            if(tab=="Matches"&&selected==null&&needsUpcomingPage(data.entries.keys,data.matches,data.matchesMore,data.matchesLoading,data.matchesError))data.loadMoreMatches()
         }
         var now by remember { mutableStateOf(System.currentTimeMillis()) }
         LaunchedEffect(tab) { while(true) { now=System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
@@ -141,9 +145,12 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
                 }
             }
         }) {padding ->
-            if(page!=null&&match==null) Box(Modifier.fillMaxSize().padding(padding)){if(page=="support")SupportScreen(session,bangla,back={page=null})else PlayerPageScreen(session,page!!,bangla){page=null}}
-            else if(tab=="Results"&&match==null) Box(Modifier.fillMaxSize().padding(padding),contentAlignment=Alignment.TopCenter){ResultsScreen(session,inMatches=true){tab="Matches"}}
-            else Box(Modifier.fillMaxSize().padding(padding),contentAlignment=Alignment.TopCenter) { AnimatedContent(targetState=tab to selected,transitionSpec={
+            Box(Modifier.fillMaxSize().padding(padding)) { FixedRefreshHost {
+                if(match!=null&&page==null)RegisterRefresh(!data.matchesLoading){data.retryMatches();matchAccessRetry++;detailRefresh++}
+                else if(tab=="Wallet"&&page==null)RegisterRefresh(!data.walletRefreshing){data.refreshWallet();withdrawalRefresh++}
+            if(page!=null&&match==null) Box(Modifier.fillMaxSize()){if(page=="support")SupportScreen(session,bangla,back={page=null})else PlayerPageScreen(session,page!!,bangla){page=null}}
+            else if(tab=="Results"&&match==null) Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter){ResultsScreen(session,inMatches=true){tab="Matches"}}
+            else Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter) { AnimatedContent(targetState=tab to selected,transitionSpec={
                 if(initialState.second!=targetState.second) (fadeIn(tween(220))+slideInHorizontally(tween(220)){if(targetState.second!=null)it/8 else -it/8}) togetherWith (fadeOut(tween(180))+slideOutHorizontally(tween(220)){if(targetState.second!=null)-it/8 else it/8})
                 else fadeIn(tween(220)) togetherWith fadeOut(tween(180))
             },label="Screen") { route ->
@@ -167,19 +174,19 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
                     item {MatchDetailsHero(session,match,now)}
                     item {MatchDetailsTabs(detailTab){detailTab=it}}
                     when(detailTab) {
-                        "Overview" -> {
-                            item {MatchRules(match)}
-                            if(match.id==selected&&matchAccess.ready&&!matchAccess.active)item{MatchRoomCard(session,match.id,data.entries[match.id]=="confirmed",data.entries[match.id])}
-                            item {MatchDetailsMetadata(match)}
-                            if(match.description.isNotBlank())item{Text(match.description,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-                            if(match.matchStatus=="cancelled")item{Text(match.cancellationReason.ifBlank{LocaleStrings.get("Contact support for cancellation details.")},style=MaterialTheme.typography.bodyMedium)}
-                            data.rosters[match.id]?.let { roster -> item {
-                                Text(t("Your registered roster","আপনার নিবন্ধিত দল"),style=MaterialTheme.typography.titleMedium)
-                                roster.forEachIndexed { index,name -> Text("${index+1}. $name") }
-                            } }
+                        "Overview" -> item {MatchOverviewPanel(match) {
+                            if(match.id==selected&&matchAccess.ready&&!matchAccess.active)key(detailRefresh){MatchRoomCard(session,match.id,data.entries[match.id]=="confirmed",data.entries[match.id])}
+                        }}
+                        "Prizes" -> item {key(detailRefresh){PrizePanel(session,match.id)}}
+                        "Players" -> {
+                            data.rosters[match.id]?.let {roster->item {
+                                Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    Text(t("Your registered roster","আপনার নিবন্ধিত দল"),style=MaterialTheme.typography.titleMedium)
+                                    roster.forEachIndexed {index,name->Text("${index+1}. $name")}
+                                }}
+                            }}
+                            item {key(detailRefresh){ParticipantList(session,match.id)}}
                         }
-                        "Prizes" -> item {PrizePanel(session,match.id)}
-                        "Players" -> item {ParticipantList(session,match.id)}
                     }
                 } else when(screen) {
                     "Home","Explore","Matches" -> {
@@ -218,13 +225,13 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
                         if(screen=="Explore") item {Text("${list.size} "+if(data.matchesMore||data.matchesLoading||data.matchesCached)t("matches loaded","ম্যাচ লোড হয়েছে")else t("matches","ম্যাচ"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
                         if(screen=="Explore"&&data.matchesLoading&&list.isEmpty())item {ExploreLoadingCard()}
                         else if(screen!="Home"&&data.matchesLoading)item {LinearProgressIndicator(Modifier.fillMaxWidth())}
-                        if(screen!="Home"&&list.isEmpty()&&!data.matchesLoading&&!data.matchesError)item {Text(if(screen=="Explore")t("No loaded matches match these filters.","লোড হওয়া ম্যাচে এই ফিল্টারে কোনো ফল নেই।") else t("No matches available yet.","এখনো কোনো ম্যাচ নেই।"))}
+                        if(screen!="Home"&&list.isEmpty()&&!data.matchesLoading&&!data.matchesError&&!(screen=="Matches"&&needsUpcomingPage(data.entries.keys,data.matches,data.matchesMore,data.matchesLoading,data.matchesError)))item {Text(if(screen=="Explore")t("No loaded matches match these filters.","লোড হওয়া ম্যাচে এই ফিল্টারে কোনো ফল নেই।") else t("No matches available yet.","এখনো কোনো ম্যাচ নেই।"))}
                         items(list,key={it.id}) {m ->
                             if(screen=="Explore")ExploreMatchCard(session,m,data.entries[m.id],now){selected=m.id}
                             else MyMatchCard(session,m,data.entries[m.id],now,open={selected=m.id},room={roomShortcut=m.id})
                         }
                         if(screen!="Home"&&data.matchesError)item{Text(t("Could not load more matches.","আরও ম্যাচ লোড হয়নি।"),color=MaterialTheme.colorScheme.error);TextButton(onClick={data.retryMatches()}){Text(t("Retry","আবার চেষ্টা করুন"))}}
-                        if(screen!="Home"&&data.matchesMore)item{OutlinedButton(onClick={data.loadMoreMatches()},modifier=Modifier.fillMaxWidth()){Text(LocaleStrings.get("Load more"))}}
+                        if(screen=="Explore"&&data.matchesMore)item {MatchFeedPaging(screen,data.matchesMore,data.matchesLoading){data.loadMoreMatches()}}
                     }
                     "Notifications" -> {
                         if(BuildConfig.NOTICE_BACKEND=="live")item {TextButton(onClick={
@@ -252,12 +259,13 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
                     }
                     "Wallet" -> {
                         item {WalletBalances(data.balance,data.winnings,data.reservedWinnings,data.balanceCached,add={addingMoney=true},withdraw={withdrawing=true})}
-                        item {key(withdrawalRefresh){WalletHistory(session,data.deposits)}}
+                        item {WalletHistory(session,data.deposits,withdrawalRefresh)}
                     }
                 }
             }
             }
         }
+        } }
         }
         if(authenticating) androidx.compose.ui.window.Dialog(onDismissRequest={authenticating=false;resumeJoin=false},properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false)) {
             AuthScreen(session,bangla,language){authenticating=false;resumeJoin=false}

@@ -150,6 +150,7 @@ dependencies {
     testImplementation(platform("androidx.compose:compose-bom:2024.04.01"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
     testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("org.mockito:mockito-core:5.14.2")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

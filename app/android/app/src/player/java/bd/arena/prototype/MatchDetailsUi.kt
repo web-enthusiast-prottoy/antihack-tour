@@ -70,18 +70,37 @@ internal fun MatchDetailsTabs(selected:String,choose:(String)->Unit) {
 }
 
 @Composable
-internal fun MatchRules(match:Tournament) {
-    var expanded by rememberSaveable(match.id){mutableStateOf(true)}
+internal fun MatchRules(match:Tournament)=MatchTextSection(match.id,"match-rules","Match rules",match.rules)
+
+@Composable
+internal fun MatchDescription(match:Tournament) {
+    if(match.description.isNotBlank())MatchTextSection(match.id,"match-description","Description",match.description)
+}
+
+@Composable
+private fun MatchTextSection(matchId:String,tag:String,title:String,body:String) {
+    var expanded by rememberSaveable(matchId,tag){mutableStateOf(true)}
     Card(shape=RoundedCornerShape(16.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-        TextButton(onClick={expanded=!expanded},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("match-rules-toggle").semantics {
+        TextButton(onClick={expanded=!expanded},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("$tag-toggle").semantics {
             stateDescription=LocaleStrings.get(if(expanded)"Expanded" else "Collapsed")
         },contentPadding=PaddingValues(16.dp)) {
-            Text(LocaleStrings.get("Match rules"),Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface)
+            Text(LocaleStrings.get(title),Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface)
             Text(if(expanded)"−" else "+",style=MaterialTheme.typography.titleMedium)
         }
         AnimatedVisibility(expanded,enter=expandVertically(tween(180))+fadeIn(tween(180)),exit=shrinkVertically(tween(160))+fadeOut(tween(160))) {
-            Text(match.rules,Modifier.fillMaxWidth().padding(start=16.dp,end=16.dp,bottom=16.dp).testTag("match-rules-body"),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(body,Modifier.fillMaxWidth().padding(start=16.dp,end=16.dp,bottom=16.dp).testTag("$tag-body"),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+internal fun MatchOverviewPanel(match:Tournament,room:@Composable ()->Unit) {
+    Column(verticalArrangement=Arrangement.spacedBy(20.dp)) {
+        MatchDescription(match)
+        MatchRules(match)
+        room()
+        MatchDetailsMetadata(match)
+        if(match.matchStatus=="cancelled")Text(match.cancellationReason.ifBlank{LocaleStrings.get("Contact support for cancellation details.")},style=MaterialTheme.typography.bodyMedium)
     }
 }
 

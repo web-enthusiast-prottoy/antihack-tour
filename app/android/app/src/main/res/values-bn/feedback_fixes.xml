@@ -1,0 +1,7 @@
+<resources>
+    <string name="feedback_fix_0">আপনার এন্ট্রির জন্য রুমের তথ্য এখনো প্রকাশ বা উন্মুক্ত করা হয়নি।</string>
+    <string name="feedback_fix_1">রুমের তথ্য দেখতে আবার সাইন ইন করুন।</string>
+    <string name="feedback_fix_2">রুমের তথ্য যাচাই করা যায়নি। সংযোগ দিয়ে আবার চেষ্টা করুন।</string>
+    <string name="feedback_fix_3">কিছু ম্যাচের তথ্য এখন আর প্রকাশ্যে পাওয়া যাচ্ছে না।</string>
+    <string name="feedback_fix_4">দেখার অনুমতি আছে এমন অতীত ম্যাচের তথ্য পাওয়া যায়নি।</string>
+</resources>

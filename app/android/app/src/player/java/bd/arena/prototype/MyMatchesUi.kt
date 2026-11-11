@@ -12,6 +12,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
+internal fun needsUpcomingPage(entries:Set<String>,matches:List<Tournament>,more:Boolean,loading:Boolean,error:Boolean)=
+    more&&!loading&&!error&&entries.any{id->matches.none{it.id==id}}
+
+@Composable
+internal fun MatchFeedPaging(screen:String,more:Boolean,loading:Boolean,load:()->Unit) {
+    if(screen=="Explore"&&more)OutlinedButton(onClick=load,enabled=!loading,modifier=Modifier.fillMaxWidth().testTag("matches-load-more")){Text(LocaleStrings.get("Load more"))}
+}
+
 @Composable
 internal fun MyMatchCard(session:AdminSession,match:Tournament,entry:String?,now:Long,open:()->Unit,room:()->Unit) {
     MyMatchCard(match,entry,now,open,room){m->ArtworkImage(session,match.artworkId,modeArtwork(match.image),m)}

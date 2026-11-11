@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun WalletHistory(session:AdminSession,deposits:List<DepositActivity>) {
+internal fun WalletHistory(session:AdminSession,deposits:List<DepositActivity>,refresh:Int=0) {
     var records by remember(session.uid){mutableStateOf<List<DocumentSnapshot>>(emptyList())}
     val paths=if(BuildConfig.LOCAL_OPERATIONS)listOf("ledger","walletLedger")else listOf("walletLedger")
     val historyPaths=paths+"withdrawals"
@@ -50,7 +50,8 @@ internal fun WalletHistory(session:AdminSession,deposits:List<DepositActivity>) 
             }
         }
     }
-    DisposableEffect(uid){load(true);onDispose{generation++}}
+    DisposableEffect(uid){onDispose{generation++}}
+    LaunchedEffect(uid,refresh){load(true)}
     val withdrawals=records.filter{it.reference.parent.id=="withdrawals"}
     val withdrawalIds=withdrawals.map{it.id}.toSet()
     val ledger=records.filter{it.reference.parent.id!="withdrawals"&&it.getString("withdrawal") !in withdrawalIds}
@@ -63,7 +64,7 @@ internal fun WalletHistory(session:AdminSession,deposits:List<DepositActivity>) 
     var filter by rememberSaveable{mutableStateOf("All activity")}
     fun key(row:WalletRow)=row.source
     Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        WalletActivityHeader(filter,loading,choose={filter=it},refresh={load(true)})
+        WalletActivityHeader(filter,choose={filter=it})
         if(cached)Text(LocaleStrings.get("Saved history · reconnect to refresh"),style=MaterialTheme.typography.bodySmall)
         val visible=rows.filter { walletActivityMatches(it.type,filter) }
         visible.sortedByDescending{it.time?.toDate()?.time?:Long.MAX_VALUE}.forEach { row ->

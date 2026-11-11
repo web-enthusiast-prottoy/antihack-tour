@@ -218,3 +218,8 @@ Public browsing hides a match more than five minutes after its scheduled start. 
 ## Single-date schedules — 10 November 2026
 
 Scheduling replaces First/Last date with one Match date and a separate Release date, using the existing native calendar dialogs. The selected From/Until times apply only to the match date. Release has no time input: helper text states 12:00 AM Bangladesh time, online-admin requirements and late-start skipping. Release after the match date shows an inline error and blocks saving. Schedule cards show both dates and a midnight release; legacy saved ranges stay readable. English/Bangla strings retain the current charcoal/sage style and saved form state. The UI UX Pro Max Compose searches returned no verified match; its general labelled-form, native control and scrolling guidance was applied.
+
+
+## Player feedback — 11 November 2026
+
+Upcoming has no public-feed Load more action. Results presents search before scope filters and preserves accessible history when an older match is removed or private. Description leads Overview as a default-expanded section, followed by rules and room access; match ID/status stay muted, and the registered roster belongs under Players. Unreleased room details use neutral waiting copy with a refresh action. Match details and Wallet use fixed bottom-end refresh icons outside scrolling content. Wallet Activity keeps one filter at the far right, moving it below the heading at large font sizes. Refresh preserves the selected activity filter. See PLAYER-FEEDBACK-FIXES.md for verification and database-access limits.

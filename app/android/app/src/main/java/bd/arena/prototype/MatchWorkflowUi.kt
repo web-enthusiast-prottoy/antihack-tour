@@ -83,6 +83,7 @@ internal fun MatchRoomContent(confirmed:Boolean,entryStatus:String?,state:RoomSt
             if(confirmed)when(val current=state) {
                 RoomState.Hidden->{Text(wt("Room details require a current server connection and the staff release time."));Button(onClick=show){Text(wt("Show room"))}}
                 RoomState.Loading->{Text(wt("Checking room availability…"),style=MaterialTheme.typography.bodySmall);LinearProgressIndicator(Modifier.fillMaxWidth())}
+                RoomState.Waiting->{Text(wt("Room details have not been published or released for your entry yet."),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);OutlinedButton(onClick=refresh){Text(wt("Refresh room"))}}
                 is RoomState.Unavailable->{Text(wt(current.message));OutlinedButton(onClick=refresh){Text(wt("Refresh room"))}}
                 is RoomState.Ready->{
                     Text(wt("Room ready"),style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)

@@ -23,6 +23,12 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ResultsScreen(session:AdminSession,inMatches:Boolean=false,back:()->Unit) {
+    FixedRefreshHost {ResultsContent(session,inMatches,back)}
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ResultsContent(session:AdminSession,inMatches:Boolean,back:()->Unit) {
     fun t(text:String)=LocaleStrings.get(text)
     val results=remember(session.uid){PublishedResults(session)}
     val history=remember(session.uid){MyMatchResults(session)}
@@ -45,19 +51,15 @@ internal fun ResultsScreen(session:AdminSession,inMatches:Boolean=false,back:()-
     val loading=if(own)history.loading else state.loading
     val cached=if(own)history.cached else state.cached
     val error=if(own&&history.error)"Could not load results. Reconnect and retry." else if(own)"" else state.error
+    RegisterRefresh(!loading){refresh()}
     LazyColumn(Modifier.widthIn(max=640.dp).fillMaxSize().imePadding(),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        item {ScreenHeader(t(if(inMatches)"My matches" else "Results"),back=if(inMatches)null else back,refresh={refresh()},refreshEnabled=!loading)}
+        item {ScreenHeader(t(if(inMatches)"My matches" else "Results"),back=if(inMatches)null else back)}
         if(inMatches)item {MatchSectionTabs(true,upcoming=back,history={})}
-        if(session.uid!=null)item {FlowRow(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {FilterChip(own,{own=true},label={Text(t("My results"))});FilterChip(!own,{own=false},label={Text(t("All published"))})}}
-        item {
-            Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                CompactSearch(input,{input=it},t("Search match ID or title"),submit={submit()})
-
-            }
-        }
+        item {ResultsSearchFilters(input,{input=it},own,session.uid!=null,{own=it},{submit()})}
+        if(own&&history.recordsUnavailable)item {Text(t("Some match records are no longer publicly available."),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
         if(cached)item {Text(t(if(own)"Saved match history · reconnect to refresh." else "Offline · showing saved published results. This list may be incomplete."))}
         if(error.isNotEmpty())item {Text(t(error),color=MaterialTheme.colorScheme.error);TextButton(onClick={refresh()}){Text(t("Retry"))}}
-        if(!loading&&error.isEmpty()&&(if(own)ownMatches.isEmpty()else state.rows.isEmpty()))item {Text(t(if(own)"No past participated matches found." else "No published results found."))}
+        if(!loading&&error.isEmpty()&&(if(own)ownMatches.isEmpty()else state.rows.isEmpty()))item {Text(t(if(own&&history.recordsUnavailable)"No accessible past match records found." else if(own)"No past participated matches found." else "No published results found."))}
         if(own)items(ownMatches,key={it.id}) {match->
             val row=history.published[match.id]
             if(row!=null)PublishedResultCard(row)else PendingResultCard(match,resultMatchTime(match.startsAtMillis))

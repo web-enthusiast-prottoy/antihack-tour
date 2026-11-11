@@ -10,8 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 
 internal data class ActivitySummary(val id:String,val title:String,val amount:String,val status:String,val time:String,val positive:Boolean,
     val key:String=id,val reference:String="",val referenceLabel:String="Payment reference: ")
@@ -22,25 +22,23 @@ internal fun activityTitle(type:String)=LocaleStrings.get(when(type.lowercase().
 internal fun walletActivityMatches(type:String,filter:String)=filter=="All activity"||type.equals(filter,true)||activityTitle(type)==LocaleStrings.get(filter)
 
 @Composable
-internal fun WalletActivityHeader(filter:String,loading:Boolean,choose:(String)->Unit,refresh:()->Unit) {
+internal fun WalletActivityHeader(filter:String,choose:(String)->Unit) {
     var menu by remember{mutableStateOf(false)}
-    @Composable fun Controls(modifier:Modifier) {
-        Row(modifier) {
-            Box(Modifier.weight(1f)) {
-                TextButton(onClick={menu=true},modifier=Modifier.testTag("activity-filter")){Text(LocaleStrings.get(filter))}
-                DropdownMenu(menu,onDismissRequest={menu=false}) {
-                    listOf("All activity","Deposit","Match entry","Match reward","Withdrawal").forEach{choice->DropdownMenuItem(text={Text(LocaleStrings.get(choice))},onClick={choose(choice);menu=false})}
-                }
+    @Composable fun Filter() {
+        Box {
+            TextButton(onClick={menu=true},modifier=Modifier.testTag("activity-filter")){Text(LocaleStrings.get(filter))}
+            DropdownMenu(menu,onDismissRequest={menu=false}) {
+                listOf("All activity","Deposit","Match entry","Match reward","Withdrawal").forEach{choice->DropdownMenuItem(text={Text(LocaleStrings.get(choice))},onClick={choose(choice);menu=false})}
             }
-            TextButton(onClick=refresh,enabled=!loading,modifier=Modifier.testTag("activity-refresh")){Text(LocaleStrings.get("Refresh"))}
         }
     }
-    if(LocalDensity.current.fontScale>1.3f)Column {
+    val header=Modifier.fillMaxWidth().testTag("wallet-activity-header")
+    if(LocalDensity.current.fontScale>1.3f)Column(header,verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(LocaleStrings.get("Activity"),style=MaterialTheme.typography.titleLarge)
-        Controls(Modifier.fillMaxWidth())
-    }else Row(verticalAlignment=Alignment.CenterVertically) {
+        Box(Modifier.align(Alignment.End)){Filter()}
+    }else Row(header,verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Text(LocaleStrings.get("Activity"),Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
-        Controls(Modifier.weight(2f))
+        Filter()
     }
 }
 

@@ -6,8 +6,22 @@ import kotlinx.coroutines.launch
 internal sealed interface RoomState {
     data object Hidden:RoomState
     data object Loading:RoomState
+    data object Waiting:RoomState
     data class Unavailable(val message:String):RoomState
     data class Ready(val roomId:String,val password:String):RoomState
+}
+
+internal fun roomResponseState(status:Int,body:String):RoomState = when(status) {
+    403,404->RoomState.Waiting
+    401->RoomState.Unavailable("Sign in again to check room details.")
+    200->runCatching {
+        val fields=org.json.JSONObject(body).getJSONObject("fields")
+        val enabled=fields.optJSONObject("enabled")?.optBoolean("booleanValue",false)==true
+        val id=fields.optJSONObject("roomId")?.optString("stringValue").orEmpty()
+        val password=fields.optJSONObject("password")?.optString("stringValue").orEmpty()
+        if(!enabled||id.isBlank()||password.isBlank())RoomState.Waiting else RoomState.Ready(id,password)
+    }.getOrElse{RoomState.Unavailable("Could not check room details. Reconnect and retry.")}
+    else->RoomState.Unavailable("Could not check room details. Reconnect and retry.")
 }
 internal class RoomAccess(private val session:AdminSession) {
     var state by mutableStateOf<RoomState>(RoomState.Hidden); private set
@@ -17,7 +31,7 @@ internal class RoomAccess(private val session:AdminSession) {
     fun open(match:String,refresh:Boolean=false) {
         request?.cancel()
         val version=++generation
-        val user=session.auth.currentUser?:return
+        val user=session.auth.currentUser?:run{state=RoomState.Hidden;return}
         if(!refresh)state=RoomState.Loading
         request=kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main.immediate).launch {
             val next=try {
@@ -34,13 +48,12 @@ internal class RoomAccess(private val session:AdminSession) {
                         connection.setRequestProperty("Authorization","Bearer $token")
                         connection.setRequestProperty("Cache-Control","no-store")
                         // This authenticated GET evaluates release time afresh under the same Firestore rules.
-                        require(connection.responseCode==200)
-                        val fields=connection.inputStream.bufferedReader().use{org.json.JSONObject(it.readText()).getJSONObject("fields")}
-                        RoomState.Ready(fields.getJSONObject("roomId").getString("stringValue"),fields.getJSONObject("password").getString("stringValue"))
+                        val status=connection.responseCode
+                        roomResponseState(status,if(status==200)connection.inputStream.bufferedReader().use{it.readText()}else "")
                     } finally {connection.disconnect()}
                 }
             } catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}
-            catch(_:Exception){RoomState.Unavailable("Room unavailable. Check the release time and your confirmed entry, then retry.")}
+            catch(_:Exception){roomResponseState(0,"")}
             if(generation==version&&session.uid==user.uid)state=next
         }
     }

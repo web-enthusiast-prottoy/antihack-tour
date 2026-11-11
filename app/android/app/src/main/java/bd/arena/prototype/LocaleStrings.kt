@@ -14,6 +14,12 @@ internal object LocaleStrings {
     }
     fun get(text:String,fallback:String=text)=values[text]?:fallback
     private val ids=mapOf(
+        "Room details have not been published or released for your entry yet." to R.string.feedback_fix_0,
+        "Sign in again to check room details." to R.string.feedback_fix_1,
+        "Could not check room details. Reconnect and retry." to R.string.feedback_fix_2,
+        "Some match records are no longer publicly available." to R.string.feedback_fix_3,
+        "No accessible past match records found." to R.string.feedback_fix_4,
+
         "Time" to R.string.remaining_time,
         "Type" to R.string.remaining_type,
         "Check the number. Funds stay reserved during review." to R.string.remaining_reserve_review,

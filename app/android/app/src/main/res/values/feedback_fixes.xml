@@ -1,0 +1,7 @@
+<resources>
+    <string name="feedback_fix_0">Room details have not been published or released for your entry yet.</string>
+    <string name="feedback_fix_1">Sign in again to check room details.</string>
+    <string name="feedback_fix_2">Could not check room details. Reconnect and retry.</string>
+    <string name="feedback_fix_3">Some match records are no longer publicly available.</string>
+    <string name="feedback_fix_4">No accessible past match records found.</string>
+</resources>
