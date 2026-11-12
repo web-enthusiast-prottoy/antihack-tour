@@ -145,7 +145,7 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
                 }
             }
         }) {padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) { FixedRefreshHost {
+            Box(Modifier.fillMaxSize().padding(padding)) { FixedRefreshHost(reserveSpace=tab!="Wallet"||match!=null) {
                 if(match!=null&&page==null)RegisterRefresh(!data.matchesLoading){data.retryMatches();matchAccessRetry++;detailRefresh++}
                 else if(tab=="Wallet"&&page==null)RegisterRefresh(!data.walletRefreshing){data.refreshWallet();withdrawalRefresh++}
             if(page!=null&&match==null) Box(Modifier.fillMaxSize()){if(page=="support")SupportScreen(session,bangla,back={page=null})else PlayerPageScreen(session,page!!,bangla){page=null}}
@@ -158,7 +158,8 @@ internal fun PlayerApp(session:AdminSession,bangla:Boolean,language:(Boolean)->U
             val match=data.matches.find { it.id==route.second }
             var detailTab by rememberSaveable(route.second){mutableStateOf("Overview")}
             val routeState=scrollStates.getOrPut(route.second?.let { "details:$it" }?:screen) { LazyListState() }
-            LazyColumn(Modifier.testTag("player-content").widthIn(max=640.dp).fillMaxWidth().fillMaxHeight().imePadding(),state=routeState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+            val bottomPadding=if(screen=="Wallet"&&match==null)FixedRefreshClearance else 16.dp
+            LazyColumn(Modifier.testTag("player-content").widthIn(max=640.dp).fillMaxWidth().fillMaxHeight().imePadding(),state=routeState,contentPadding=PaddingValues(start=16.dp,top=16.dp,end=16.dp,bottom=bottomPadding),verticalArrangement=Arrangement.spacedBy(20.dp)) {
                 item {ScreenHeader(if(match!=null)LocaleStrings.get("Match details") else if(screen=="Home")"Antihack Tour" else LocaleStrings.get(if(screen=="Matches")"My matches" else screen),back=if(match!=null||screen=="Notifications")({if(match!=null)selected=null else tab="Home"})else null,actions={
                     if(screen=="Notifications"&&match==null)IconButton(onClick={read=(read+feed.notices.map{it.readKey}).toSet();prefs.edit().putStringSet("read",read).apply()}){Icon(painterResource(R.drawable.ic_check),LocaleStrings.get("Mark all read"))}
                     if(screen=="Wallet"&&match==null)IconButton(onClick={balanceInfo=true}){Icon(painterResource(R.drawable.ic_info),LocaleStrings.get("Your balances"))}

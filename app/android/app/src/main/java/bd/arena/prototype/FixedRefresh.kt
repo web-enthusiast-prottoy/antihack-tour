@@ -9,6 +9,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
+internal val FixedRefreshClearance = 76.dp
+
 internal class RefreshAction(val enabled:Boolean,val run:()->Unit)
 internal val LocalFixedRefresh=staticCompositionLocalOf<MutableMap<Any,RefreshAction>?>{null}
 
@@ -22,11 +24,11 @@ internal fun RegisterRefresh(enabled:Boolean=true,refresh:()->Unit) {
 }
 
 @Composable
-internal fun FixedRefreshHost(content:@Composable ()->Unit) {
+internal fun FixedRefreshHost(reserveSpace:Boolean=true,content:@Composable ()->Unit) {
     val actions=remember{mutableStateMapOf<Any,RefreshAction>()}
     CompositionLocalProvider(LocalFixedRefresh provides actions) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().padding(bottom=if(actions.isEmpty())0.dp else 76.dp)){content()}
+            Box(Modifier.fillMaxSize().padding(bottom=if(reserveSpace&&actions.isNotEmpty())FixedRefreshClearance else 0.dp)){content()}
             if(actions.isNotEmpty())FilledIconButton(onClick={actions.values.toList().filter{it.enabled}.forEach{it.run()}},enabled=actions.values.any{it.enabled},modifier=Modifier.align(Alignment.BottomEnd).padding(12.dp).size(52.dp).testTag("fixed-refresh")) {
                 Icon(painterResource(R.drawable.ic_refresh),LocaleStrings.get("Refresh"))
             }

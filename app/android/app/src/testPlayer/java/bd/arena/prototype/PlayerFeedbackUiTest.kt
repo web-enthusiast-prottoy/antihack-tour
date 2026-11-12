@@ -70,21 +70,29 @@ class PlayerFeedbackUiTest {
     }
     @Test fun walletFilterAlignsAtRightAndRefreshStaysAtBottomAfterScrolling() {
         var refreshes=0
-        content{FixedRefreshHost {
-            RegisterRefresh{refreshes++}
-            LazyColumn(Modifier.fillMaxSize().testTag("wallet-test-list"),contentPadding=PaddingValues(16.dp)) {
-                item{WalletActivityHeader("All activity",{})}
-                items(20){Text("Activity row $it",Modifier.height(80.dp))}
+        content {
+            Box(Modifier.fillMaxSize().testTag("wallet-viewport")) {
+                FixedRefreshHost(reserveSpace=false) {
+                    RegisterRefresh{refreshes++}
+                    LazyColumn(Modifier.fillMaxSize().testTag("wallet-test-list"),contentPadding=PaddingValues(start=16.dp,top=16.dp,end=16.dp,bottom=FixedRefreshClearance)) {
+                        item{WalletActivityHeader("All activity",{})}
+                        items(20){Text("Activity row $it",Modifier.height(80.dp))}
+                    }
+                }
             }
-        }}
+        }
+        val list=ui.onNodeWithTag("wallet-test-list")
+        val viewport=ui.onNodeWithTag("wallet-viewport").fetchSemanticsNode().boundsInRoot
+        assertEquals(viewport.bottom,list.fetchSemanticsNode().boundsInRoot.bottom,1f)
         val header=ui.onNodeWithTag("wallet-activity-header").fetchSemanticsNode().boundsInRoot
         val filter=ui.onNodeWithTag("activity-filter").fetchSemanticsNode().boundsInRoot
         assertEquals(header.right,filter.right,1f)
         ui.onNodeWithTag("activity-refresh").assertDoesNotExist();ui.onNodeWithText("Refresh").assertDoesNotExist()
-        ui.onNodeWithTag("wallet-test-list").performScrollToIndex(20)
-        ui.onNodeWithText("Activity row 19").assertIsDisplayed()
-        ui.onNodeWithTag("fixed-refresh").assertIsDisplayed().performClick();assertEquals(1,refreshes)
-        ui.onNodeWithTag("fixed-refresh").assertHeightIsEqualTo(52.dp)
+        list.performScrollToIndex(20)
+        val lastRow=ui.onNodeWithText("Activity row 19").assertIsDisplayed()
+        val refresh=ui.onNodeWithTag("fixed-refresh").assertIsDisplayed().assertHeightIsEqualTo(52.dp)
+        assertTrue(lastRow.fetchSemanticsNode().boundsInRoot.bottom<refresh.fetchSemanticsNode().boundsInRoot.top)
+        refresh.performClick();assertEquals(1,refreshes)
     }
     @Test fun fixedRefreshUsesCurrentActionAndDisablesWhileBusy() {
         var busy by mutableStateOf(false);var count=0

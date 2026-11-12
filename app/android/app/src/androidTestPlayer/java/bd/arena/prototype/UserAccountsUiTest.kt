@@ -62,6 +62,11 @@ class UserAccountsUiTest {
         ui.runOnUiThread {data.operation("deposit",mapOf("sender" to "01700000000","amount" to 1000L,"reference" to "UITEST${System.currentTimeMillis()}")) {finished.set(true)}}
         ui.waitUntil(30_000) {finished.get()||data.error.isNotEmpty()}
         org.junit.Assert.assertTrue(data.error,finished.get())
+        ui.onNode(hasText("Wallet") and hasClickAction()).performClick()
+        ui.waitUntil(10_000) { ui.onAllNodesWithText("Activity").fetchSemanticsNodes().isNotEmpty() }
+        val refresh = ui.onNodeWithContentDescription("Refresh").assertIsDisplayed()
+        val activityList = ui.onNodeWithTag("player-content").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(activityList.bottom > refresh.fetchSemanticsNode().boundsInRoot.bottom)
         session.close()
         auth.signOut()
         ui.waitUntil(10_000) {ui.onAllNodesWithText("Profile").fetchSemanticsNodes().isNotEmpty()}
